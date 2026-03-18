@@ -15,6 +15,8 @@ import TuneIcon from '@mui/icons-material/Tune';
 import CompareIcon from '@mui/icons-material/Compare';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import CloudDoneIcon from '@mui/icons-material/CloudDone';
+import PeopleIcon from '@mui/icons-material/People';
+import ArticleIcon from '@mui/icons-material/Article';
 import { ProjectProvider, useProject } from './context/ProjectContext';
 import ProgettoTab from './components/ProgettoTab';
 import TariffeTab from './components/TariffeTab';
@@ -22,6 +24,8 @@ import UnitaTab from './components/UnitaTab';
 import RegoleTab from './components/RegoleTab';
 import ScenariTab from './components/ScenariTab';
 import RisultatiTab from './components/RisultatiTab';
+import PersoneTab from './components/PersoneTab';
+import ContrattoTab from './components/ContrattoTab';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -89,6 +93,8 @@ function AppContent() {
           <Tab icon={<TuneIcon />} label="Regole" iconPosition="start" />
           <Tab icon={<CompareIcon />} label="Scenari" iconPosition="start" />
           <Tab icon={<AssessmentIcon />} label="Risultati" iconPosition="start" />
+          <Tab icon={<PeopleIcon />} label="Persone" iconPosition="start" />
+          <Tab icon={<ArticleIcon />} label="Contratto" iconPosition="start" />
         </Tabs>
       </AppBar>
 
@@ -99,6 +105,8 @@ function AppContent() {
         <TabPanel value={tab} index={3}><RegoleTab /></TabPanel>
         <TabPanel value={tab} index={4}><ScenariTab /></TabPanel>
         <TabPanel value={tab} index={5}><RisultatiTab /></TabPanel>
+        <TabPanel value={tab} index={6}><PersoneTab /></TabPanel>
+        <TabPanel value={tab} index={7}><ContrattoTab /></TabPanel>
       </Box>
     </Box>
   );

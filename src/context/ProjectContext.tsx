@@ -19,6 +19,9 @@ import {
   RoomType,
   TariffUnit,
   TariffSource,
+  Person,
+  TipoContratto,
+  Contract,
 } from '../models/types';
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
@@ -48,6 +51,8 @@ function makeDefaultProject(): Project {
     units: [],
     tariffs: [],
     scenarios: [],
+    persons: [],
+    contracts: [],
   };
 }
 
@@ -89,6 +94,16 @@ interface ProjectContextValue {
   addScenario: (partial: Omit<Scenario, 'id'>) => void;
   updateScenario: (id: string, updates: Partial<Omit<Scenario, 'id'>>) => void;
   deleteScenario: (id: string) => void;
+
+  // persons
+  addPerson: (name: string, tipoContratto: TipoContratto, redditoNettoMensile: number, notes?: string) => void;
+  updatePerson: (id: string, updates: Partial<Omit<Person, 'id'>>) => void;
+  deletePerson: (id: string) => void;
+
+  // contracts
+  addContract: (partial: Omit<Contract, 'id'>) => void;
+  updateContract: (id: string, updates: Partial<Omit<Contract, 'id'>>) => void;
+  deleteContract: (id: string) => void;
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -338,6 +353,55 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     [patch],
   );
 
+  // ── Persons ──────────────────────────────────────────────────────────────────────
+
+  const addPerson = useCallback(
+    (name: string, tipoContratto: TipoContratto, redditoNettoMensile: number, notes = '') =>
+      patch(p => ({
+        ...p,
+        persons: [...(p.persons ?? []), { id: uuidv4(), name, tipoContratto, redditoNettoMensile, notes }],
+      })),
+    [patch],
+  );
+
+  const updatePerson = useCallback(
+    (id: string, updates: Partial<Omit<Person, 'id'>>) =>
+      patch(p => ({
+        ...p,
+        persons: (p.persons ?? []).map(per => (per.id === id ? { ...per, ...updates } : per)),
+      })),
+    [patch],
+  );
+
+  const deletePerson = useCallback(
+    (id: string) =>
+      patch(p => ({ ...p, persons: (p.persons ?? []).filter(per => per.id !== id) })),
+    [patch],
+  );
+
+  // ── Contracts ─────────────────────────────────────────────────────────────────
+
+  const addContract = useCallback(
+    (partial: Omit<Contract, 'id'>) =>
+      patch(p => ({ ...p, contracts: [...(p.contracts ?? []), { id: uuidv4(), ...partial }] })),
+    [patch],
+  );
+
+  const updateContract = useCallback(
+    (id: string, updates: Partial<Omit<Contract, 'id'>>) =>
+      patch(p => ({
+        ...p,
+        contracts: (p.contracts ?? []).map(c => (c.id === id ? { ...c, ...updates } : c)),
+      })),
+    [patch],
+  );
+
+  const deleteContract = useCallback(
+    (id: string) =>
+      patch(p => ({ ...p, contracts: (p.contracts ?? []).filter(c => c.id !== id) })),
+    [patch],
+  );
+
   // ── Value ─────────────────────────────────────────────────────────────────────
 
   const value: ProjectContextValue = {
@@ -364,6 +428,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     addScenario,
     updateScenario,
     deleteScenario,
+    addPerson,
+    updatePerson,
+    deletePerson,
+    addContract,
+    updateContract,
+    deleteContract,
   };
 
   return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;

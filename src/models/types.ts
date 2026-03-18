@@ -177,4 +177,114 @@ export interface Project {
   units: Unit[];
   tariffs: Tariff[];
   scenarios: Scenario[];
+  persons: Person[];
+  contracts: Contract[];
+}
+
+// ── Person (acquirente / cointestatario) ──────────────────────────────────────
+
+export type TipoContratto = 'dipendente' | 'autonomo' | 'altro';
+export const TIPO_CONTRATTO_LABELS: Record<TipoContratto, string> = {
+  dipendente: 'Lavoratore dipendente',
+  autonomo: 'Lavoratore autonomo / libero professionista',
+  altro: 'Altro / pensionato',
+};
+
+export interface Person {
+  id: string;
+  name: string;
+  tipoContratto: TipoContratto;
+  redditoNettoMensile: number;   // € netti/mese
+  notes: string;
+}
+
+// ── Contract ──────────────────────────────────────────────────────────────────
+
+/** Tipo di venditore: determina imposte registro/IVA e imposte fisse */
+export type VenditoreTipo = 'privato' | 'costruttore_prima_casa' | 'costruttore_ordinario';
+export const VENDITORE_TIPO_LABELS: Record<VenditoreTipo, string> = {
+  privato: 'Privato (cedente soggetto privato o soc. esente IVA)',
+  costruttore_prima_casa: 'Costruttore – prima casa (IVA 4%)',
+  costruttore_ordinario: 'Costruttore – ordinario (IVA 10%)',
+};
+
+/** Un singolo scenario incluso nel contratto, con il suo prezzo di acquisto */
+export interface ContractScenarioEntry {
+  scenarioId: string;
+  prezzoAcquisto: number;          // valore dichiarato nell'atto (€)
+  isPrimaCasa: boolean;            // agevolazione prima casa per questo immobile
+  venditore: VenditoreTipo;
+}
+
+/** Configurazione del mutuo bancario */
+export interface MutuoConfig {
+  enabled: boolean;
+  importo: number;                 // importo del mutuo (€)
+  tassoAnnuo: number;              // tasso fisso annuo (es. 0.035 = 3.5%)
+  durataAnni: number;              // durata in anni
+  isPrimaCasa: boolean;            // imposta sostitutiva 0.25% vs 2%
+}
+
+/** Singola voce di costo bancario/extra */
+export interface CostoBancario {
+  id: string;
+  label: string;                   // es. "Istruttoria banca"
+  importo: number;
+  hasIva: boolean;                 // se true: importo è imponibile, si aggiunge IVA 22%
+}
+
+/** Costi notarili (rogito + mutuo) */
+export interface CostiNotaio {
+  // Atto di compravendita
+  rogitoOnorario: number;          // onorario netto notaio
+  rogitoIva: boolean;              // true = + IVA 22% (sempre per notaio)
+  rogitoSpeseExtra: number;        // visure, bolli, etc. (no IVA)
+  // Atto di mutuo (se presente)
+  mutuoOnorario: number;
+  mutuoIva: boolean;
+  mutuoSpeseExtra: number;
+}
+
+/** Stima costi utenze mensili */
+export interface UtenzaConfig {
+  enabled: boolean;
+  numOccupanti: number;
+  // Coefficienti personalizzabili €/mq/anno
+  elettricitaKwhAnno: number;      // kWh/anno
+  elettricitaPrezzioKwh: number;   // €/kWh
+  acquaEuroAnno: number;           // stima fissa mensile
+  gasEuroAnno: number;
+  internetEuroAnno: number;
+  condominieMqAnno: number;        // €/mq/anno per condominio
+}
+
+export interface Contract {
+  id: string;
+  name: string;
+  scenarioEntries: ContractScenarioEntry[];
+  personIds: string[];             // persone cointestate / garanti reddito
+
+  // Agenzia
+  hasAgenzia: boolean;
+  agenziaPercent: number;          // es. 0.03 = 3%
+  agenziaMinimo: number;           // minimo provvigione (€)
+
+  // Notaio
+  costiNotaio: CostiNotaio;
+
+  // Mutuo
+  mutuo: MutuoConfig;
+
+  // Costi banca / perizia
+  perizia: number;
+  peruziaHasIva: boolean;
+  bancaCosti: CostoBancario[];
+
+  // Compromesso
+  compromessoRegistrazione: number; // es. 250 (no IVA)
+
+  // Utenze
+  utenza: UtenzaConfig;
+
+  notes: string;
 }

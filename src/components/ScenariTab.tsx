@@ -33,7 +33,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CallMergeIcon from '@mui/icons-material/CallMerge';
 import { useProject } from '../context/ProjectContext';
-import { Scenario, CATEGORY_OPTIONS_A, CATEGORY_OPTIONS_C, CLASS_OPTIONS } from '../models/types';
+import { Scenario, CATEGORY_OPTIONS_A, CATEGORY_OPTIONS_C, CLASS_OPTIONS, LuxuryCheckMode, LUXURY_CHECK_MODE_LABELS } from '../models/types';
 import InfoTooltip from './InfoTooltip';
 
 function emptyScenario(dwellingUnitId = '', pertinenzaUnitId = ''): Omit<Scenario, 'id'> {
@@ -52,6 +52,8 @@ function emptyScenario(dwellingUnitId = '', pertinenzaUnitId = ''): Omit<Scenari
     imuAliquota: 0.0076,
     imuIsMainHome: true,
     imuDetrazione: 200,
+    luxuryCheckMode: 'analisiDM1969',
+    dataAtto: '',
   };
 }
 
@@ -84,6 +86,8 @@ function ScenarioDialog({ open, initial, onClose, onSave }: ScenarioDialogProps)
           imuAliquota: initial.imuAliquota,
           imuIsMainHome: initial.imuIsMainHome,
           imuDetrazione: initial.imuDetrazione,
+          luxuryCheckMode: initial.luxuryCheckMode ?? 'analisiDM1969',
+          dataAtto: initial.dataAtto ?? '',
         }
       : emptyScenario(dwellingUnits[0]?.id ?? '', pertinenzaUnits[0]?.id ?? ''),
   );
@@ -307,6 +311,50 @@ function ScenarioDialog({ open, initial, onClose, onSave }: ScenarioDialogProps)
                   />
                 </Grid>
               </Grid>
+            )}
+          </Paper>
+
+          {/* ── Analisi Lusso ────────────────────────────────── */}
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+              <Typography variant="subtitle2" fontWeight={700}>Analisi Lusso</Typography>
+              <InfoTooltip text="Seleziona il regime giuridico corretto per la verifica della natura \u2018di lusso\u2019. Dal 1/1/2014 (registro) e dal 13/12/2014 (IVA) conta la categoria catastale (A/1, A/8, A/9), non pi\u00f9 il D.M. 1969. Per analisi storiche o generiche usa 'Analisi D.M. 2/8/1969'." />
+            </Box>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Regime di verifica</InputLabel>
+                  <Select
+                    value={form.luxuryCheckMode ?? 'analisiDM1969'}
+                    label="Regime di verifica"
+                    onChange={e => set('luxuryCheckMode', e.target.value as LuxuryCheckMode)}
+                  >
+                    {(Object.keys(LUXURY_CHECK_MODE_LABELS) as LuxuryCheckMode[]).map(m => (
+                      <MenuItem key={m} value={m}>{LUXURY_CHECK_MODE_LABELS[m]}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              {(form.luxuryCheckMode === 'primaCasaRegistro' || form.luxuryCheckMode === 'primaCasaIVA') && (
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="Data atto (YYYY-MM-DD)"
+                    type="date"
+                    value={form.dataAtto ?? ''}
+                    onChange={e => set('dataAtto', e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    helperText="La data dell'atto determina quale regime si applica (prima/dopo la riforma)."
+                  />
+                </Grid>
+              )}
+            </Grid>
+            {(form.luxuryCheckMode === 'primaCasaRegistro' || form.luxuryCheckMode === 'primaCasaIVA') && (
+              <Alert severity="info" sx={{ mt: 1.5, py: 0.5 }}>
+                {form.luxuryCheckMode === 'primaCasaRegistro'
+                  ? <><strong>Registro dal 1/1/2014</strong>: conta la categoria catastale (A/1, A/8, A/9) — D.Lgs. 23/2011 art. 10.<br />Prima del 1/1/2014: verranno applicati i criteri del D.M. 2/8/1969.</>                  : <><strong>IVA dal 13/12/2014</strong>: conta la categoria catastale (A/1, A/8, A/9) — D.Lgs. 175/2014 art. 33.<br />Prima del 13/12/2014: verranno applicati i criteri del D.M. 2/8/1969 (circ. AdE 2/E 2014).</>
+                }
+              </Alert>
             )}
           </Paper>
         </Box>

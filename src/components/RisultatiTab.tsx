@@ -27,7 +27,7 @@ import InfoIcon from '@mui/icons-material/Info';
 import CallMergeIcon from '@mui/icons-material/CallMerge';
 import { useProject } from '../context/ProjectContext';
 import { runScenario, mergeUnits, ScenarioResult, RenditaResult, LuxuryAnalysis } from '../engine/calculator';
-import { ROOM_TYPE_LABELS, RoomType } from '../models/types';
+import { ROOM_TYPE_LABELS, RoomType, LUXURY_CHECK_MODE_LABELS } from '../models/types';
 
 // ── Currency formatter ────────────────────────────────────────────────────────
 
@@ -141,50 +141,155 @@ function AuditTrailPanel({ result }: { result: RenditaResult }) {
 // ── Luxury criteria panel ─────────────────────────────────────────────────────
 
 function LuxuryCriteriaPanel({ analysis }: { analysis: LuxuryAnalysis }) {
-  const count = analysis.triggeredCount;
+  const {
+    mode, dataAtto, catastaleIsLuxury, dm1969Applied,
+    surfaceMethod, dmSurfaceMq, ambiguousRoomWarnings,
+    isLuxury, absoluteTriggered, tableTriggered, art8Triggered,
+  } = analysis;
+  const modeLabel = LUXURY_CHECK_MODE_LABELS[mode];
+
   return (
     <Accordion sx={{ mt: 1, border: 1, borderColor: 'warning.light' }}>
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <WarningAmberIcon color={analysis.isLuxury ? 'warning' : 'disabled'} fontSize="small" />
-          <Typography variant="subtitle2">
-            Analisi Lusso DM 2/8/1969
-          </Typography>
-          <Chip
-            label={count === 0 ? 'Nessun criterio' : `${count} criteri${count > 1 ? '' : 'o'} attivo/i`}
-            size="small"
-            color={count > 0 ? 'warning' : 'default'}
-          />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <WarningAmberIcon color={isLuxury ? 'warning' : 'disabled'} fontSize="small" />
+          <Typography variant="subtitle2">Analisi Lusso</Typography>
+          <Chip label={modeLabel} size="small" variant="outlined" />
+          {!dm1969Applied && catastaleIsLuxury != null && (
+            <Chip
+              label={catastaleIsLuxury ? 'Categoria: LUSSO (A/1, A/8 o A/9)' : 'Categoria: non è A/1/A/8/A/9'}
+              size="small"
+              color={catastaleIsLuxury ? 'warning' : 'success'}
+            />
+          )}
+          {dm1969Applied && absoluteTriggered > 0 && (
+            <Chip label={`${absoluteTriggered} criterio/i assoluto/i`} size="small" color="warning" />
+          )}
+          {dm1969Applied && art8Triggered && (
+            <Chip label={`Art.8: ${tableTriggered}/14 caratteristiche`} size="small" color="warning" />
+          )}
+          {dm1969Applied && !isLuxury && tableTriggered > 0 && !art8Triggered && (
+            <Chip label={`${tableTriggered}/14 caratteristiche (soglia: >4)`} size="small" color="default" />
+          )}
+          {dm1969Applied && !isLuxury && absoluteTriggered === 0 && tableTriggered === 0 && (
+            <Chip label="Nessun criterio DM 1969" size="small" color="default" />
+          )}
         </Box>
       </AccordionSummary>
       <AccordionDetails sx={{ p: 1.5 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-          Un'unità è di lusso (A/1, A/8, A/9) se soddisfa anche solo uno dei criteri del DM 2 agosto 1969.
-        </Typography>
-        <Table size="small">
-          <TableBody>
-            {analysis.criteria.map(c => (
-              <TableRow key={c.id} sx={{ '&:last-child td': { border: 0 } }}>
-                <TableCell sx={{ width: 28, pr: 0 }}>
-                  {c.triggered
-                    ? <WarningAmberIcon color="warning" fontSize="small" />
-                    : <CheckCircleIcon color="disabled" fontSize="small" />}
-                </TableCell>
-                <TableCell sx={{ width: 32, color: 'text.secondary' }}>
-                  <Typography variant="caption">cr.{c.id}</Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2" fontWeight={c.triggered ? 700 : 400} color={c.triggered ? 'warning.dark' : 'text.primary'}>
-                    {c.label}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {c.detail}
-                  </Typography>
-                </TableCell>
-              </TableRow>
+        {/* Regime info box */}
+        <Box sx={{ mb: 1.5, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
+          <Typography variant="caption" color="text.secondary">
+            Regime: <strong>{modeLabel}</strong>
+            {dataAtto && ` — Atto: ${dataAtto}`}
+          </Typography>
+          {!dm1969Applied && (
+            <Typography variant="caption" color="text.secondary" display="block">
+              {mode === 'primaCasaRegistro'
+                ? 'D.Lgs. 23/2011 art. 10 – dal 1/1/2014 conta la categoria catastale (non il D.M. 1969)'
+                : 'D.Lgs. 175/2014 art. 33 + circ. AdE 31/E 2014 – dal 13/12/2014 conta la categoria catastale'}
+            </Typography>
+          )}
+          {dm1969Applied && (
+            <Typography variant="caption" color="text.secondary" display="block">
+              Superficie DM 1969:{' '}
+              <strong>{dmSurfaceMq.toFixed(1)} m²</strong>{' '}
+              — Metodo:{' '}
+              {surfaceMethod === 'globale' ? 'superficie globale atto' : 'somma vani (Main + Accessori diretti)'}
+            </Typography>
+          )}
+        </Box>
+
+        {/* Catastale result (when DM 1969 not applied) */}
+        {!dm1969Applied && (
+          <Box sx={{ p: 1, bgcolor: isLuxury ? 'warning.light' : 'success.light', borderRadius: 1, mb: 1 }}>
+            <Typography variant="body2" fontWeight={700} color={isLuxury ? 'warning.dark' : 'success.dark'}>
+              {isLuxury
+                ? '⚠ Categoria A/1, A/8 o A/9: abitazione di lusso ai fini del regime selezionato'
+                : '✓ Categoria non compresa tra A/1, A/8, A/9: non di lusso ai fini del regime selezionato'}
+            </Typography>
+          </Box>
+        )}
+
+        {/* Ambiguous room warnings */}
+        {ambiguousRoomWarnings.length > 0 && (
+          <Alert severity="warning" sx={{ mb: 1.5, py: 0.5 }}>
+            <Typography variant="caption" fontWeight={700} display="block">
+              Ambienti con indicatori di “utilizzabilità” (Cass. ord. 2503/2025):
+            </Typography>
+            {ambiguousRoomWarnings.map((w, i) => (
+              <Typography key={i} variant="caption" display="block">• {w}</Typography>
             ))}
-          </TableBody>
-        </Table>
+            <Typography variant="caption" display="block" sx={{ mt: 0.5, fontStyle: 'italic' }}>
+              Questi ambienti sono attualmente esclusi dalla superficie utile. Valuta se includerli come “vani principali” o “accessori diretti”.
+            </Typography>
+          </Alert>
+        )}
+
+        {/* DM 1969 Section A + B — only when DM 1969 engine was applied */}
+        {dm1969Applied && (
+          <>
+            {/* Section A */}
+            <Typography variant="caption" color="warning.dark" fontWeight={700} sx={{ display: 'block', mb: 0.5 }}>
+              A · Criteri assoluti (art. 1–7) — basta UNO
+            </Typography>
+            <Table size="small" sx={{ mb: 1.5 }}>
+              <TableBody>
+                {analysis.absoluteCriteria.map(c => (
+                  <TableRow key={c.id} sx={{ '&:last-child td': { border: 0 } }}>
+                    <TableCell sx={{ width: 28, pr: 0 }}>
+                      {c.triggered
+                        ? <WarningAmberIcon color="warning" fontSize="small" />
+                        : <CheckCircleIcon color="disabled" fontSize="small" />}
+                    </TableCell>
+                    <TableCell sx={{ width: 64, color: 'text.secondary' }}>
+                      <Typography variant="caption">art.{c.id}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={c.triggered ? 700 : 400} color={c.triggered ? 'warning.dark' : 'text.primary'}>
+                        {c.label}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">{c.detail}</Typography>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+
+            {/* Section B */}
+            <Typography
+              variant="caption"
+              color={art8Triggered ? 'warning.dark' : 'text.secondary'}
+              fontWeight={700}
+              sx={{ display: 'block', mb: 0.5 }}
+            >
+              B · Caratteristiche tabella (art. 8) — attive {tableTriggered}/14
+              {art8Triggered ? ' → PIÙ DI 4: LUSSO' : tableTriggered > 0 ? ' (≤4: non sufficiente)' : ''}
+            </Typography>
+            <Table size="small">
+              <TableBody>
+                {analysis.tableCriteria.map(c => (
+                  <TableRow key={c.id} sx={{ '&:last-child td': { border: 0 } }}>
+                    <TableCell sx={{ width: 28, pr: 0 }}>
+                      {c.triggered
+                        ? <WarningAmberIcon color="warning" fontSize="small" />
+                        : <CheckCircleIcon color="disabled" fontSize="small" />}
+                    </TableCell>
+                    <TableCell sx={{ width: 64, color: 'text.secondary' }}>
+                      <Typography variant="caption">tab.{c.id})</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={c.triggered ? 700 : 400} color={c.triggered ? 'warning.dark' : 'text.primary'}>
+                        {c.label}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">{c.detail}</Typography>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </>
+        )}
       </AccordionDetails>
     </Accordion>
   );
@@ -348,7 +453,7 @@ function ScenarioCard({ result, isFusion, fusionUnitNames }: {
         )}
 
         {/* Luxury criteria analysis */}
-        {flags.luxuryAnalysis.criteria.length > 0 && (
+        {result.dwelling && (
           <LuxuryCriteriaPanel analysis={flags.luxuryAnalysis} />
         )}
       </Box>
@@ -465,6 +570,8 @@ export default function RisultatiTab() {
         imuAliquota: s.imuAliquota,
         imuIsMainHome: s.imuIsMainHome,
         imuDetrazione: s.imuDetrazione,
+        luxuryCheckMode: s.luxuryCheckMode ?? 'analisiDM1969',
+        dataAtto: s.dataAtto,
       });
     });
   }, [project]);

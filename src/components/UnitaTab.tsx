@@ -19,7 +19,6 @@ import {
   FormGroup,
   FormControlLabel,
   Checkbox,
-  Switch,
   InputLabel,
   Table,
   TableHead,
@@ -188,9 +187,9 @@ function UnitDialog({ open, initial, onClose, onSave }: UnitDialogProps) {
 interface RoomDialogProps {
   open: boolean;
   title: string;
-  initial?: { name?: string; roomType?: RoomType; areaMq?: number; notes?: string; luxuryMaterials?: boolean; centralHeating?: boolean };
+  initial?: { name?: string; roomType?: RoomType; areaMq?: number; notes?: string; accessoDaInterno?: boolean; impiantiPresenti?: boolean };
   onClose: () => void;
-  onSave: (name: string, roomType: RoomType, areaMq: number, notes: string, luxuryMaterials: boolean, centralHeating: boolean) => void;
+  onSave: (name: string, roomType: RoomType, areaMq: number, notes: string, accessoDaInterno: boolean, impiantiPresenti: boolean) => void;
 }
 
 function RoomDialog({ open, title, initial, onClose, onSave }: RoomDialogProps) {
@@ -198,23 +197,23 @@ function RoomDialog({ open, title, initial, onClose, onSave }: RoomDialogProps) 
   const [roomType, setRoomType] = useState<RoomType>(initial?.roomType ?? 'Main');
   const [areaMq, setAreaMq] = useState(initial?.areaMq?.toString() ?? '');
   const [notes, setNotes] = useState(initial?.notes ?? '');
-  const [luxuryMaterials, setLuxuryMaterials] = useState(initial?.luxuryMaterials ?? false);
-  const [centralHeating, setCentralHeating] = useState(initial?.centralHeating ?? false);
+  const [accessoDaInterno, setAccessoDaInterno] = useState(initial?.accessoDaInterno ?? false);
+  const [impiantiPresenti, setImpiantiPresenti] = useState(initial?.impiantiPresenti ?? false);
 
   function handleClose() {
     setName(initial?.name ?? '');
     setRoomType(initial?.roomType ?? 'Main');
     setAreaMq(initial?.areaMq?.toString() ?? '');
     setNotes(initial?.notes ?? '');
-    setLuxuryMaterials(initial?.luxuryMaterials ?? false);
-    setCentralHeating(initial?.centralHeating ?? false);
+    setAccessoDaInterno(initial?.accessoDaInterno ?? false);
+    setImpiantiPresenti(initial?.impiantiPresenti ?? false);
     onClose();
   }
 
   function handleSave() {
     const area = parseFloat(areaMq);
     if (!name.trim() || isNaN(area) || area <= 0) return;
-    onSave(name.trim(), roomType, area, notes, luxuryMaterials, centralHeating);
+    onSave(name.trim(), roomType, area, notes, accessoDaInterno, impiantiPresenti);
     handleClose();
   }
 
@@ -277,53 +276,28 @@ function RoomDialog({ open, title, initial, onClose, onSave }: RoomDialogProps) 
             placeholder="es. 'balcone comunicante', 'altezza ridotta 2.20 m', 'finestra doppia esposizione'"
             helperText="Campo facoltativo per annotazioni utili al calcolo o alla verifica"
           />
-
-          {/* ── Luxury flags (DM 2/8/1969) ── */}
-          <Divider />
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Typography variant="subtitle2" color="warning.dark" fontWeight={700}>
-              Caratteristiche di lusso – questo vano (DM 2/8/1969)
-            </Typography>
-            <InfoTooltip text="Queste spunte fanno parte dell'analisi automatica dei criteri di lusso previsti dal DM 2 agosto 1969. Un'abitazione è considerata 'di lusso' se soddisfa almeno uno dei 7 criteri elencati, con conseguenza di non poter beneficiare delle agevolazioni prima casa né dell'esenzione IMU come abitazione principale." />
-          </Box>
-          <FormGroup>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  size="small"
-                  checked={luxuryMaterials}
-                  onChange={e => setLuxuryMaterials(e.target.checked)}
+          {/* Utilizzabilità flags — visible only for AccessoryComplementary */}
+          {roomType === 'AccessoryComplementary' && (
+            <Box sx={{ p: 1.5, bgcolor: 'warning.light', borderRadius: 1 }}>
+              <Typography variant="caption" fontWeight={700} display="block" sx={{ mb: 0.5 }}>
+                Indicatori di “utilizzabilità” (Cass. ord. 2503/2025)
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                Se questo vano è accessibile dall’interno o dotato di impianti, la Cassazione potrebbe
+                considerarlo “concretamente utilizzabile” e computarlo nella superficie utile DM 1969.
+              </Typography>
+              <FormGroup row>
+                <FormControlLabel
+                  control={<Checkbox size="small" checked={accessoDaInterno} onChange={e => setAccessoDaInterno(e.target.checked)} />}
+                  label={<Typography variant="caption">Accesso diretto dall’interno dell’abitazione</Typography>}
                 />
-              }
-              label={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Typography variant="body2">Criterio 5 – Materiali di pregio</Typography>
-                  <InfoTooltip
-                    size="small"
-                    text="Spunta se questo vano ha finiture di pregio: pavimenti o rivestimenti in marmo, granito o pietre naturali pregiate; parquet in legno nobile; stucchi decorativi, boiserie o controsoffitti decorativi. Basta UN solo vano con materiali di pregio nell'intera unità per innescare il criterio di lusso."
-                  />
-                </Box>
-              }
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  size="small"
-                  checked={centralHeating}
-                  onChange={e => setCentralHeating(e.target.checked)}
+                <FormControlLabel
+                  control={<Checkbox size="small" checked={impiantiPresenti} onChange={e => setImpiantiPresenti(e.target.checked)} />}
+                  label={<Typography variant="caption">Impianti presenti (acqua/scarico/riscaldamento)</Typography>}
                 />
-              }
-              label={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Typography variant="body2">Criterio 6 – Riscaldamento centralizzato</Typography>
-                  <InfoTooltip
-                    size="small"
-                    text="Il 'riscaldamento centralizzato' nel senso del DM 2/8/1969 indica un impianto fisso di riscaldamento (radiatori, pavimento radiante, fan-coil ecc.) presente in questo locale. ATTENZIONE: il criterio di lusso scatta solo se TUTTI i locali abitabili dell'unità hanno questa spunta attiva — non basta che solo alcuni la abbiano."
-                  />
-                </Box>
-              }
-            />
-          </FormGroup>
+              </FormGroup>
+            </Box>
+          )}
         </Box>
       </DialogContent>
       <DialogActions>
@@ -419,7 +393,7 @@ function FloorSection({ unitId, floor }: FloorSectionProps) {
                 <TableCell><strong>Vano</strong></TableCell>
                 <TableCell><strong>Tipo</strong></TableCell>
                 <TableCell align="right"><strong>m²</strong></TableCell>
-                <TableCell><strong>Note / Lusso</strong></TableCell>
+                <TableCell><strong>Note</strong></TableCell>
                 <TableCell align="center"><strong>Azioni</strong></TableCell>
               </TableRow>
             </TableHead>
@@ -435,20 +409,8 @@ function FloorSection({ unitId, floor }: FloorSectionProps) {
                     />
                   </TableCell>
                   <TableCell align="right">{room.areaMq.toFixed(1)}</TableCell>
-                  <TableCell sx={{ maxWidth: 200 }}>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {room.notes && (
-                        <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
-                          {room.notes}
-                        </Typography>
-                      )}
-                      {room.luxuryMaterials && (
-                        <Chip label="Pregio" size="small" color="warning" variant="outlined" />
-                      )}
-                      {room.centralHeating && (
-                        <Chip label="Risc." size="small" color="error" variant="outlined" />
-                      )}
-                    </Box>
+                  <TableCell sx={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <Typography variant="caption" color="text.secondary">{room.notes}</Typography>
                   </TableCell>
                   <TableCell align="center">
                     <Tooltip title="Modifica">
@@ -486,8 +448,8 @@ function FloorSection({ unitId, floor }: FloorSectionProps) {
         open={addRoomOpen}
         title={`Nuovo Vano – ${floor.name}`}
         onClose={() => setAddRoomOpen(false)}
-        onSave={(name, roomType, areaMq, notes, luxuryMaterials, centralHeating) => {
-          addRoom(unitId, floor.id, name, roomType, areaMq, notes, luxuryMaterials, centralHeating);
+        onSave={(name, roomType, areaMq, notes, accessoDaInterno, impiantiPresenti) => {
+          addRoom(unitId, floor.id, name, roomType, areaMq, notes, accessoDaInterno, impiantiPresenti);
           setAddRoomOpen(false);
         }}
       />
@@ -499,13 +461,234 @@ function FloorSection({ unitId, floor }: FloorSectionProps) {
           title={`Modifica Vano – ${editRoom.name}`}
           initial={editRoom}
           onClose={() => setEditRoom(null)}
-          onSave={(name, roomType, areaMq, notes, luxuryMaterials, centralHeating) => {
-            updateRoom(unitId, floor.id, editRoom.id, { name, roomType, areaMq, notes, luxuryMaterials, centralHeating });
+          onSave={(name, roomType, areaMq, notes, accessoDaInterno, impiantiPresenti) => {
+            updateRoom(unitId, floor.id, editRoom.id, { name, roomType, areaMq, notes, accessoDaInterno, impiantiPresenti });
             setEditRoom(null);
           }}
         />
       )}
     </Box>
+  );
+}
+
+// ── Unit luxury analysis panel (DM 2/8/1969) ─────────────────────────────────
+
+function LuxuryCheckRow({ checked, onChange, label, tooltip }: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  tooltip: string;
+}) {
+  return (
+    <FormControlLabel
+      sx={{ alignItems: 'flex-start', mt: 0.25 }}
+      control={<Checkbox size="small" checked={checked} onChange={e => onChange(e.target.checked)} sx={{ pt: 0.25 }} />}
+      label={
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Typography variant="body2">{label}</Typography>
+          <InfoTooltip size="small" text={tooltip} />
+        </Box>
+      }
+    />
+  );
+}
+
+function LuxuryAutoRow({ checked, label }: { checked: boolean; label: string }) {
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, pl: 0.5, py: 0.25 }}>
+      <Checkbox size="small" checked={checked} disabled sx={{ p: 0.5 }} />
+      <Typography variant="body2" color={checked ? 'warning.dark' : 'text.secondary'} fontWeight={checked ? 700 : 400} fontStyle="italic">
+        {label}
+      </Typography>
+    </Box>
+  );
+}
+
+function UnitLuxuryPanel({ unit }: { unit: Unit }) {
+  const { updateUnit } = useProject();
+  const unitTotalMq = unit.floors.flatMap(f => f.rooms)
+    .filter(r => r.roomType !== 'Excluded' && r.roomType !== 'Terrazzo')
+    .reduce((s, r) => s + r.areaMq, 0);
+  const unitTerrazzaMq = unit.floors.flatMap(f => f.rooms)
+    .filter(r => r.roomType === 'Terrazzo')
+    .reduce((s, r) => s + r.areaMq, 0);
+  const gardenRatio = unitTotalMq > 0 ? (unit.gardenMq ?? 0) / unitTotalMq : 0;
+  const upd = (updates: Partial<Unit>) => updateUnit(unit.id, updates);
+
+  return (
+    <Accordion sx={{ mt: 2 }} TransitionProps={{ unmountOnExit: true }}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="subtitle2" color="warning.dark" fontWeight={700}>
+            Analisi lusso DM 2 agosto 1969
+          </Typography>
+          <InfoTooltip text="Il DM 2 agosto 1969 definisce due percorsi: (A) Criteri assoluti art. 1–7 — basta che sia soddisfatto anche solo UNO. (B) Caratteristiche tabella art. 8 — l'unità è di lusso se soddisfa PIÙ DI 4 su 14 caratteristiche. Art.6 e Tab.a)/b) sono verificati automaticamente dalla geometria inserita." />
+        </Box>
+      </AccordionSummary>
+
+      <AccordionDetails sx={{ pt: 1 }}>
+        {/* A — Absolute criteria */}
+        <Typography variant="caption" sx={{ fontWeight: 700, color: 'warning.dark', display: 'block', mb: 0.5 }}>
+          A · Criteri assoluti (art. 1–7) — basta UNO solo per essere di lusso
+        </Typography>
+        <FormGroup sx={{ pl: 1, mb: 1.5 }}>
+          <LuxuryCheckRow
+            checked={unit.art1_luxuryZone ?? false}
+            onChange={v => upd({ art1_luxuryZone: v })}
+            label='Art.1 – Zona urb. "ville", "parco privato" o "di lusso"'
+            tooltip='Art. 1: abitazioni realizzate su area classificata dagli strumenti urbanistici (PRG) come zona destinata a "ville", "parco privato", o dove le costruzioni sono espressamente qualificate come "di lusso".'
+          />
+          <LuxuryCheckRow
+            checked={unit.art2_largeLot ?? false}
+            onChange={v => upd({ art2_largeLot: v })}
+            label="Art.2 – Lotto unifamiliare con vincolo ≥ 3.000 m²"
+            tooltip="Art. 2: abitazioni su aree destinate a case unifamiliari con prescrizione di lotti non inferiori a 3.000 m² (escluse zone agricole, anche se ammettono costruzioni residenziali)."
+          />
+          <LuxuryCheckRow
+            checked={unit.art3_lowDensity ?? false}
+            onChange={v => upd({ art3_lowDensity: v })}
+            label="Art.3 – Fabbricato >2.000 mc e densità <25 mc v.p.p. per 100 m²"
+            tooltip="Art. 3: fabbricato con cubatura >2.000 mc v.p.p. (vuoto per pieno) realizzato su lotto con densità <25 mc v.p.p. per ogni 100 m² di superficie asservita."
+          />
+          <LuxuryCheckRow
+            checked={unit.art4_pool ?? false}
+            onChange={v => upd({ art4_pool: v })}
+            label="Art.4 – Piscina unifamiliare ≥ 80 m²"
+            tooltip="Art. 4: abitazione unifamiliare dotata di piscina di almeno 80 m² di superficie. Si applica solo a case unifamiliari; per piscine condominiali usare Tab.o)."
+          />
+          <LuxuryCheckRow
+            checked={unit.art4_tennis ?? false}
+            onChange={v => upd({ art4_tennis: v })}
+            label="Art.4 – Campo da tennis unifamiliare ≥ 650 m² (sottofondo drenato)"
+            tooltip="Art. 4: abitazione unifamiliare con campo da tennis con sottofondo drenato di superficie non inferiore a 650 m²."
+          />
+          <LuxuryCheckRow
+            checked={unit.art5_villa ?? false}
+            onChange={v => upd({ art5_villa: v })}
+            label="Art.5 – Casa unifamiliare >200 m² con area scoperta >6× area coperta"
+            tooltip="Art. 5: casa unifamiliare con superficie utile >200 m² (esclusi balconi, terrazze, cantine, soffitte, scale e posto macchine) E con area scoperta di pertinenza >6× area coperta. Inserire la superficie del giardino nel campo seguente."
+          />
+          {(unit.art5_villa ?? false) && (
+            <Box sx={{ pl: 4, mt: 0.5, mb: 1 }}>
+              <TextField
+                size="small"
+                label="Superficie giardino / pertinenza scoperta (m²)"
+                type="number"
+                inputProps={{ min: 0, step: 1 }}
+                value={unit.gardenMq ?? ''}
+                onChange={e => {
+                  const v = parseFloat(e.target.value);
+                  upd({ gardenMq: isNaN(v) ? 0 : v });
+                }}
+                sx={{ maxWidth: 320 }}
+                helperText={unitTotalMq > 0
+                  ? `Rapporto attuale: ${gardenRatio.toFixed(2)}× (soglia >6×) — superficie interna: ${unitTotalMq.toFixed(1)} m²`
+                  : 'Inserisci prima la geometria dei vani'}
+              />
+            </Box>
+          )}
+          <LuxuryAutoRow
+            checked={unitTotalMq > 240}
+            label={`Art.6 – Sup. utile >240 m² — calcolato automaticamente: ${unitTotalMq.toFixed(1)} m²`}
+          />
+          <LuxuryCheckRow
+            checked={unit.art7_expensiveLand ?? false}
+            onChange={v => upd({ art7_expensiveLand: v })}
+            label="Art.7 – Costo terreno coperto >1,5× costo costruzione"
+            tooltip="Art. 7: abitazioni in fabbricati dove il costo del terreno coperto e di pertinenza supera di una volta e mezzo il costo della sola costruzione."
+          />
+        </FormGroup>
+
+        <Divider sx={{ mb: 1 }} />
+
+        {/* B — Table characteristics */}
+        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', mb: 0.5 }}>
+          B · Caratteristiche tabella (art. 8) — servono PIÙ DI 4 su 14 per essere di lusso
+        </Typography>
+        <FormGroup sx={{ pl: 1 }}>
+          <LuxuryAutoRow
+            checked={unitTotalMq > 160}
+            label={`Tab.a) – Sup. appartamento >160 m² — calcolato: ${unitTotalMq.toFixed(1)} m²`}
+          />
+          <LuxuryAutoRow
+            checked={unitTerrazzaMq > 65}
+            label={`Tab.b) – Terrazze/balconi >65 m² — calcolato: ${unitTerrazzaMq.toFixed(1)} m² (inserisci vani "Terrazzo/Balcone")`}
+          />
+          <LuxuryCheckRow
+            checked={unit.table_c_multiLift ?? false}
+            onChange={v => upd({ table_c_multiLift: v })}
+            label="Tab.c) – Più di 1 ascensore per scala (con <7 piani sopraelevati)"
+            tooltip="Tab. c): quando vi sia più di un ascensore per ogni scala; ogni ascensore aggiuntivo conta per una caratteristica se la scala serve meno di 7 piani sopraelevati."
+          />
+          <LuxuryCheckRow
+            checked={unit.table_d_serviceStairs ?? false}
+            onChange={v => upd({ table_d_serviceStairs: v })}
+            label="Tab.d) – Scala di servizio non obbligatoria per legge/regolamento"
+            tooltip="Tab. d): scala di servizio quando non sia prescritta da leggi, regolamenti o necessità di prevenzione infortuni od incendi."
+          />
+          <LuxuryCheckRow
+            checked={unit.table_e_serviceElevator ?? false}
+            onChange={v => upd({ table_e_serviceElevator: v })}
+            label="Tab.e) – Montacarichi o ascensore di servizio al servizio di <4 piani"
+            tooltip="Tab. e): montacarichi o ascensore di servizio al servizio di meno di 4 piani."
+          />
+          <LuxuryCheckRow
+            checked={unit.table_f_stairMaterials ?? false}
+            onChange={v => upd({ table_f_stairMaterials: v })}
+            label="Tab.f) – Scala principale con rivestimenti pregiati (>170 cm di media)"
+            tooltip="Tab. f): scala principale con pareti rivestite di materiali pregiati per altezza >170 cm di media, oppure con pareti rivestite di materiali lavorati in modo pregiato."
+          />
+          <LuxuryCheckRow
+            checked={unit.table_g_highCeilings ?? false}
+            onChange={v => upd({ table_g_highCeilings: v })}
+            label="Tab.g) – Altezza libera netta del piano >3,30 m"
+            tooltip="Tab. g): altezza libera netta del piano superiore a 3,30 m, salvo che i regolamenti edilizi locali prevedano altezze minime superiori."
+          />
+          <LuxuryCheckRow
+            checked={unit.table_h_fancyDoors ?? false}
+            onChange={v => upd({ table_h_fancyDoors: v })}
+            label="Tab.h) – Porte d'ingresso agli appartamenti in legno pregiato/intagliato"
+            tooltip="Tab. h): porte di ingresso agli appartamenti da scala interna in legno pregiato massello o lastronato; in legno intagliato, scolpito o intarsiato; oppure con decorazioni pregiate sovrapposte od impresse."
+          />
+          <LuxuryCheckRow
+            checked={unit.table_i_fancyInfissi ?? false}
+            onChange={v => upd({ table_i_fancyInfissi: v })}
+            label="Tab.i) – Infissi interni pregiati (>50% della superficie totale infissi)"
+            tooltip="Tab. i): infissi interni con le stesse caratteristiche pregiate delle porte h), anche se tamburati, qualora la loro superficie complessiva superi il 50% della superficie totale degli infissi."
+          />
+          <LuxuryCheckRow
+            checked={unit.table_l_fancyFloors ?? false}
+            onChange={v => upd({ table_l_fancyFloors: v })}
+            label="Tab.l) – Pavimenti pregiati (>50% della superficie utile totale)"
+            tooltip="Tab. l): pavimenti in materiale pregiato o con materiali lavorati in modo pregiato, per superficie >50% della superficie utile totale dell'appartamento."
+          />
+          <LuxuryCheckRow
+            checked={unit.table_m_fancyWalls ?? false}
+            onChange={v => upd({ table_m_fancyWalls: v })}
+            label="Tab.m) – Pareti con materiali pregiati/stoffe (>30% della superficie)"
+            tooltip="Tab. m): pareti eseguite con materiali e lavori pregiati o rivestite di stoffe od altri materiali pregiati per oltre il 30% della loro superficie complessiva."
+          />
+          <LuxuryCheckRow
+            checked={unit.table_n_decorCeilings ?? false}
+            onChange={v => upd({ table_n_decorCeilings: v })}
+            label="Tab.n) – Soffitti a cassettoni decorati o con stucchi dipinti a mano"
+            tooltip="Tab. n): soffitti a cassettoni decorati oppure decorati con stucchi tirati sul posto dipinti a mano. Escluse le piccole sagome di distacco fra pareti e soffitti."
+          />
+          <LuxuryCheckRow
+            checked={unit.table_o_condoPool ?? false}
+            onChange={v => upd({ table_o_condoPool: v })}
+            label="Tab.o) – Piscina in muratura al servizio di edificio/complesso <15 unità"
+            tooltip="Tab. o): piscina coperta o scoperta in muratura al servizio di edificio o complesso comprendenti meno di 15 unità immobiliari. Per piscine unifamiliari usare Art.4."
+          />
+          <LuxuryCheckRow
+            checked={unit.table_p_condoTennis ?? false}
+            onChange={v => upd({ table_p_condoTennis: v })}
+            label="Tab.p) – Campo da tennis al servizio di edificio/complesso <15 unità"
+            tooltip="Tab. p): campo da tennis al servizio di edificio o complesso comprendenti meno di 15 unità immobiliari."
+          />
+        </FormGroup>
+      </AccordionDetails>
+    </Accordion>
   );
 }
 
@@ -605,78 +788,9 @@ export default function UnitaTab() {
               <FloorSection key={floor.id} unitId={unit.id} floor={floor} />
             ))}
 
-            {/* ── Luxury flags per unit (DM 2/8/1969) ── */}
+            {/* ── Luxury analysis panel (DM 2/8/1969) ── */}
             {unit.unitType === 'DwellingA' && (
-              <Paper variant="outlined" sx={{ p: 2, mt: 2, borderColor: 'warning.light' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-                  <Typography variant="subtitle2" color="warning.dark" fontWeight={700}>
-                    Caratteristiche di lusso – Unità (DM 2/8/1969)
-                  </Typography>
-                  <InfoTooltip text="Il DM 2 agosto 1969 definisce le abitazioni di lusso. Se anche solo uno dei 7 criteri è soddisfatto, l'unità è di lusso (categorie A/1, A/8, A/9) e non può beneficiare delle agevolazioni prima casa né dell'esenzione IMU come abitazione principale." />
-                </Box>
-                <FormGroup>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        size="small"
-                        checked={unit.hasPool ?? false}
-                        onChange={e => updateUnit(unit.id, { hasPool: e.target.checked })}
-                      />
-                    }
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <Typography variant="body2">Criterio 3 – Piscina scoperta ≥ 80 m² o maneggio</Typography>
-                        <InfoTooltip size="small" text="L'unità dispone di una piscina scoperta di almeno 80 m² di specchio d'acqua, oppure di un maneggio per cavalli, anche se di pertinenza comune con altri soggetti." />
-                      </Box>
-                    }
-                  />
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        size="small"
-                        checked={unit.hasPrivateLift ?? false}
-                        onChange={e => updateUnit(unit.id, { hasPrivateLift: e.target.checked })}
-                      />
-                    }
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <Typography variant="body2">Criterio 4 – Ascensore esclusivo (al servizio di meno di 4 appartamenti)</Typography>
-                        <InfoTooltip size="small" text="L'edificio dispone di un ascensore al servizio esclusivo dell'appartamento oppure al servizio di non più di altri 3 appartamenti. Gli ascensori condominiali normali (al servizio di molti appartamenti) non rientrano in questo criterio." />
-                      </Box>
-                    }
-                  />
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        size="small"
-                        checked={unit.isVilla ?? false}
-                        onChange={e => updateUnit(unit.id, { isVilla: e.target.checked })}
-                      />
-                    }
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <Typography variant="body2">Criterio 7 – Villa unifamiliare isolata con giardino</Typography>
-                        <InfoTooltip size="small" text="L'abitazione è una villa unifamiliare isolata (non adiacente ad altre abitazioni) con giardino privato. Il criterio di lusso scatta se la superficie del giardino supera 6 volte la superficie coperta dell'abitazione. Inserire la superficie del giardino nel campo seguente." />
-                      </Box>
-                    }
-                  />
-                  {(unit.isVilla ?? false) && (
-                    <TextField
-                      size="small"
-                      label="Superficie giardino (m²)"
-                      type="number"
-                      inputProps={{ min: 0, step: 1 }}
-                      value={unit.gardenMq ?? ''}
-                      onChange={e => {
-                        const v = parseFloat(e.target.value);
-                        updateUnit(unit.id, { gardenMq: isNaN(v) ? 0 : v });
-                      }}
-                      sx={{ mt: 1, maxWidth: 240 }}
-                      helperText="Area del giardino privato in m² (la scheda Risultati calcolerà il rapporto con la superficie coperta)"
-                    />
-                  )}
-                </FormGroup>
-              </Paper>
+              <UnitLuxuryPanel unit={unit} />
             )}
 
             <Divider sx={{ my: 1 }} />

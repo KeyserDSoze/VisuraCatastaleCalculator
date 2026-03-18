@@ -1,4 +1,4 @@
-import { Unit, RuleSet, Tariff, RoomType } from '../models/types';
+import { Unit, RuleSet, Tariff, RoomType, LuxuryCheckMode } from '../models/types';
 
 // ── Rounding ──────────────────────────────────────────────────────────────────
 
@@ -59,8 +59,10 @@ export interface ConsistenzaTrace {
   dipendenzaAdj: number;
   vaniAdjusted: number;
   vaniRounded: number;
-  totalMq: number;    // superficie utile escluse terrazze/balconi (soglia 240 m² DM 2/8/1969)
-  terrazzaMq: number; // superficie terrazze/balconi (soglia 65 m² DM 2/8/1969)
+  totalMq: number;          // Main + Kitchen + AccessoryDirect + AccessoryComplementary (per display)
+  terrazzaMq: number;       // Terrazzo/balconi (esclusi da DM 1969)
+  complementaryMq: number;  // AccessoryComplementary (cantine/soffitte – escluse da superficie DM 1969)
+  excludedMq: number;       // Excluded (scale, posti macchine – esclusi da tutto)
 }
 
 export interface RenditaResult {
@@ -78,16 +80,26 @@ export interface RenditaResult {
 // ── Luxury analysis types (DM 2 agosto 1969) ─────────────────────────────────
 
 export interface LuxuryCriterion {
-  id: number;
+  id: string;
   label: string;
   detail: string;
   triggered: boolean;
 }
 
 export interface LuxuryAnalysis {
+  mode: LuxuryCheckMode;
+  dataAtto?: string;
+  catastaleIsLuxury?: boolean;           // true se la categoria è A/1, A/8 o A/9
+  dm1969Applied: boolean;                // true se il motore DM 1969 è stato eseguito
+  surfaceMethod: 'globale' | 'roomBased';
+  dmSurfaceMq: number;                   // superficie usata nel calcolo DM 1969 (art. 6, tab. a/b)
+  ambiguousRoomWarnings: string[];       // vani con indicatori di "utilizzabilità" (Cass. ord. 2503/2025)
   isLuxury: boolean;
-  triggeredCount: number;
-  criteria: LuxuryCriterion[];
+  absoluteTriggered: number;
+  tableTriggered: number;
+  art8Triggered: boolean;
+  absoluteCriteria: LuxuryCriterion[];
+  tableCriteria: LuxuryCriterion[];
 }
 
 export interface ScenarioResult {
@@ -113,6 +125,8 @@ export function calculateConsistenzaVani(unit: Unit, ruleSet: RuleSet): Consiste
   let vaniRaw = 0;
   let totalMq = 0;
   let terrazzaMq = 0;
+  let complementaryMq = 0;
+  let excludedMq = 0;
 
   for (const floor of unit.floors) {
     const roomContribs: RoomContribution[] = [];
@@ -122,8 +136,11 @@ export function calculateConsistenzaVani(unit: Unit, ruleSet: RuleSet): Consiste
       const baseCoeff = getRoomCoeff(room.roomType, ruleSet);
       if (room.roomType === 'Terrazzo') {
         terrazzaMq += room.areaMq;
-      } else if (room.roomType !== 'Excluded') {
+      } else if (room.roomType === 'Excluded') {
+        excludedMq += room.areaMq;
+      } else {
         totalMq += room.areaMq;
+        if (room.roomType === 'AccessoryComplementary') complementaryMq += room.areaMq;
       }
 
       if (baseCoeff === 0) {
@@ -175,7 +192,7 @@ export function calculateConsistenzaVani(unit: Unit, ruleSet: RuleSet): Consiste
   const vaniAdjusted = vaniRaw + dipendenzaAdj;
   const vaniRounded = roundHalfVano(vaniAdjusted);
 
-  return { floors, vaniRaw, dipendenzaAdj, vaniAdjusted, vaniRounded, totalMq, terrazzaMq };
+  return { floors, vaniRaw, dipendenzaAdj, vaniAdjusted, vaniRounded, totalMq, terrazzaMq, complementaryMq, excludedMq };
 }
 
 // ── Consistenza for Group C (m²) ──────────────────────────────────────────────
@@ -218,6 +235,8 @@ export function calculateConsistenzaMq(unit: Unit): { mq: number; trace: Consist
       vaniRounded: mq,
       totalMq: mq,
       terrazzaMq: 0,
+      complementaryMq: 0,
+      excludedMq: 0,
     },
   };
 }
@@ -250,75 +269,248 @@ export function calculateImu(
   return { base, imu: Math.max(0, base * aliquota - detrazione) };
 }
 
-// ── Luxury analysis (DM 2 agosto 1969) ────────────────────────────────────────────────────────
+// ── Luxury analysis (DM 2 agosto 1969 / regime catastale) ────────────────────
+const CATASTALE_LUXURY_CATEGORIES = ['A/1', 'A/8', 'A/9'];
 
-function analyzeLuxury(unit: Unit | undefined, totalMq: number, terrazzaMq: number): LuxuryAnalysis {
-  if (!unit) return { isLuxury: false, triggeredCount: 0, criteria: [] };
+function analyzeLuxury(
+  unit: Unit | undefined,
+  trace: { totalMq: number; terrazzaMq: number; complementaryMq: number; excludedMq: number },
+  mode: LuxuryCheckMode,
+  dataAtto: string | undefined,
+  dwellingCategory: string,
+): LuxuryAnalysis {
+  const catastaleIsLuxury = CATASTALE_LUXURY_CATEGORIES.includes(dwellingCategory);
+  const emptyDm1969 = {
+    dm1969Applied: false as const,
+    surfaceMethod: 'roomBased' as const,
+    dmSurfaceMq: 0,
+    ambiguousRoomWarnings: [] as string[],
+    isLuxury: false,
+    absoluteTriggered: 0,
+    tableTriggered: 0,
+    art8Triggered: false,
+    absoluteCriteria: [] as LuxuryCriterion[],
+    tableCriteria: [] as LuxuryCriterion[],
+  };
 
-  const allRooms = unit.floors.flatMap(f => f.rooms);
-  const habitableRooms = allRooms.filter(r => r.roomType !== 'Excluded' && r.roomType !== 'Terrazzo');
+  // ── Regime routing ─────────────────────────────────────────────────────────
+  // primaCasaRegistro: D.Lgs. 23/2011 art. 10 – dal 1/1/2014 conta la categoria
+  // primaCasaIVA: D.Lgs. 175/2014 art. 33 + circ. AdE 31/E 2014 – dal 13/12/2014 conta la categoria
+  // analisiDM1969: always use the DM 1969 engine regardless of date
+  let useCatastale = false;
+  if (mode === 'primaCasaRegistro') {
+    useCatastale = !dataAtto || dataAtto >= '2014-01-01';
+  } else if (mode === 'primaCasaIVA') {
+    useCatastale = !dataAtto || dataAtto >= '2014-12-13';
+  }
 
-  const c1 = totalMq > 240;
-  const c2 = terrazzaMq > 65;
-  const c3 = unit.hasPool ?? false;
-  const c4 = unit.hasPrivateLift ?? false;
-  const roomsPregio = habitableRooms.filter(r => r.luxuryMaterials);
-  const c5 = roomsPregio.length > 0;
-  const c6 = habitableRooms.length > 0 && habitableRooms.every(r => r.centralHeating);
-  const gardenRatio = totalMq > 0 ? (unit.gardenMq ?? 0) / totalMq : 0;
-  const c7 = (unit.isVilla ?? false) && gardenRatio > 6;
+  if (useCatastale) {
+    return { mode, dataAtto, catastaleIsLuxury, ...emptyDm1969, isLuxury: catastaleIsLuxury };
+  }
 
-  const criteria: LuxuryCriterion[] = [
+  // ── DM 1969 engine ─────────────────────────────────────────────────────────
+  const dm1969Base = {
+    mode,
+    dataAtto,
+    catastaleIsLuxury: mode === 'analisiDM1969' ? undefined : catastaleIsLuxury,
+    dm1969Applied: true as const,
+  };
+
+  if (!unit) {
+    return { ...dm1969Base, ...emptyDm1969, dm1969Applied: true };
+  }
+
+  // Compute DM 1969 surface (Cass. 29643/2019: SU = globale − balconi/terrazze − cantine/soffitte − scale/p.macchine)
+  let dmSurfaceMq: number;
+  let surfaceMethod: 'globale' | 'roomBased';
+  const globale = unit.superficieGlobaleAttoMq;
+  if (globale != null && globale > 0) {
+    dmSurfaceMq = Math.max(0, globale - trace.terrazzaMq - trace.complementaryMq - trace.excludedMq);
+    surfaceMethod = 'globale';
+  } else {
+    // Room-based: Main + Kitchen + AccessoryDirect only (cantine/soffitte excluded per Cassazione)
+    dmSurfaceMq = Math.max(0, trace.totalMq - trace.complementaryMq);
+    surfaceMethod = 'roomBased';
+  }
+  const terrazzaMq = trace.terrazzaMq;
+
+  // ── Ambiguous rooms (Cass. ord. 2503/2025) ─────────────────────────────────
+  const ambiguousRoomWarnings: string[] = [];
+  for (const floor of unit.floors) {
+    for (const room of floor.rooms) {
+      if (room.roomType === 'AccessoryComplementary' && (room.accessoDaInterno || room.impiantiPresenti)) {
+        const flags = [
+          room.accessoDaInterno && 'accesso diretto dall\u2019interno',
+          room.impiantiPresenti && 'impianti (acqua/scarico/riscaldamento)',
+        ].filter(Boolean).join(', ');
+        ambiguousRoomWarnings.push(
+          `"${room.name}" (${floor.name}): cantina/soffitta con ${flags} \u2192 potenzialmente computabile come superficie utile (Cass. ord. 2503/2025)`,
+        );
+      }
+    }
+  }
+
+  // ── Absolute criteria (Art. 1–7): ONE is enough ──────────────────────────────────
+  const gardenRatio = dmSurfaceMq > 0 ? (unit.gardenMq ?? 0) / dmSurfaceMq : 0;
+
+  const absoluteCriteria: LuxuryCriterion[] = [
     {
-      id: 1,
-      label: 'Superficie utile > 240 m²',
-      detail: `${totalMq.toFixed(1)} m² (terrazze/balconi esclusi)`,
-      triggered: c1,
+      id: '1',
+      label: 'Zona urb. "ville", "parco privato" o "di lusso"',
+      detail: 'Art. 1 – abitazioni su aree destinate dagli strumenti urbanistici (PRG) a ville, parco privato o costruzioni qualificate come di lusso.',
+      triggered: unit.art1_luxuryZone ?? false,
     },
     {
-      id: 2,
-      label: 'Terrazze/balconi > 65 m²',
-      detail: `${terrazzaMq.toFixed(1)} m² di terrazze/balconi inseriti`,
-      triggered: c2,
+      id: '2',
+      label: 'Lotto unifamiliare con vincolo ≥ 3.000 m²',
+      detail: 'Art. 2 – abitazioni su aree per case unifamiliari con prescrizione di lotti non inferiori a 3.000 m² (escluse zone agricole).',
+      triggered: unit.art2_largeLot ?? false,
     },
     {
-      id: 3,
-      label: 'Piscina scoperta ≥ 80 m² o maneggio',
-      detail: c3 ? 'Segnalato sull’unità' : 'Non segnalato',
-      triggered: c3,
+      id: '3',
+      label: 'Fabbricato >2.000 mc e densità <25 mc v.p.p./100 m²',
+      detail: 'Art. 3 – fabbricato con cubatura >2.000 mc v.p.p. realizzato su lotto con densità edificatoria <25 mc v.p.p. per 100 m² di superficie asservita.',
+      triggered: unit.art3_lowDensity ?? false,
     },
     {
-      id: 4,
-      label: 'Ascensore al servizio di <4 appartamenti',
-      detail: c4 ? 'Segnalato sull’unità' : 'Non segnalato',
-      triggered: c4,
+      id: '4a',
+      label: 'Piscina unifamiliare ≥ 80 m²',
+      detail: 'Art. 4 – abitazione unifamiliare dotata di piscina di almeno 80 m² di superficie (specchio d’acqua).',
+      triggered: unit.art4_pool ?? false,
     },
     {
-      id: 5,
-      label: 'Materiali di pregio in almeno un locale',
-      detail: c5
-        ? `${roomsPregio.length} locale/i: ${roomsPregio.map(r => r.name).join(', ')}`
-        : 'Nessun locale segnalato',
-      triggered: c5,
+      id: '4b',
+      label: 'Campo da tennis unifamiliare ≥ 650 m² (sottofondo drenato)',
+      detail: 'Art. 4 – abitazione unifamiliare con campo da tennis con sottofondo drenato di superficie non inferiore a 650 m².',
+      triggered: unit.art4_tennis ?? false,
     },
     {
-      id: 6,
-      label: 'Riscaldamento centralizzato in ogni locale',
-      detail: `${habitableRooms.filter(r => r.centralHeating).length}/${habitableRooms.length} locali con riscaldamento centralizzato`,
-      triggered: c6,
+      id: '5',
+      label: 'Casa unifamiliare >200 m² con giardino >6× area coperta',
+      detail: (unit.art5_villa ?? false)
+        ? `Art. 5 – sup. utile ${dmSurfaceMq.toFixed(1)} m² (soglia >200 m²), giardino ${(unit.gardenMq ?? 0).toFixed(0)} m² — rapporto ${gardenRatio.toFixed(2)}× (soglia >6×).`
+        : 'Art. 5 – casa unifamiliare con sup. >200 m² (esclusi balconi/cantine/soffitte/scale/p.macchine) con area scoperta pertinenza >6× area coperta. Non selezionato.',
+      triggered: (unit.art5_villa ?? false) && dmSurfaceMq > 200 && gardenRatio > 6,
     },
     {
-      id: 7,
-      label: 'Villa unifamiliare con giardino > 6× superficie coperta',
-      detail: (unit.isVilla ?? false)
-        ? `Giardino: ${(unit.gardenMq ?? 0).toFixed(0)} m² — rapporto ${gardenRatio.toFixed(2)}× (soglia: >6×)`
-        : 'Non applicabile (non è villa unifamiliare)',
-      triggered: c7,
+      id: '6',
+      label: 'Superficie utile complessiva >240 m²',
+      detail: `Art. 6 – superficie utile calcolata ${dmSurfaceMq.toFixed(1)} m² (esclusi balconi, terrazze, cantine, soffitte, scale e posto macchine). Metodo: ${surfaceMethod === 'globale' ? 'superficie globale atto' : 'somma vani'}.`,
+      triggered: dmSurfaceMq > 240,
+    },
+    {
+      id: '7',
+      label: 'Costo terreno coperto >1,5× costo costruzione',
+      detail: 'Art. 7 – abitazioni in fabbricati dove il costo del terreno coperto e di pertinenza supera di una volta e mezzo il costo della sola costruzione.',
+      triggered: unit.art7_expensiveLand ?? false,
     },
   ];
 
-  const triggeredCount = criteria.filter(c => c.triggered).length;
-  return { isLuxury: triggeredCount > 0, triggeredCount, criteria };
+  // ── Table characteristics (Art. 8): MORE THAN 4 needed ─────────────────────
+  const tableCriteria: LuxuryCriterion[] = [
+    {
+      id: 'a',
+      label: `Superficie appartamento >160 m² (${dmSurfaceMq.toFixed(1)} m²)`,
+      detail: 'Tab. a) – superficie utile complessiva >160 m² (esclusi balconi, terrazze, cantine, soffitte, scale e posto macchine).',
+      triggered: dmSurfaceMq > 160,
+    },
+    {
+      id: 'b',
+      label: `Terrazze/balconi >65 m² (${terrazzaMq.toFixed(1)} m²)`,
+      detail: 'Tab. b) – terrazze a livello coperte/scoperte e balconi con superficie utile complessiva >65 m² al servizio della singola unità.',
+      triggered: terrazzaMq > 65,
+    },
+    {
+      id: 'c',
+      label: 'Più di un ascensore per scala (<7 piani sopraelevati)',
+      detail: 'Tab. c) – quando vi sia più di un ascensore per ogni scala; ogni ascensore aggiuntivo conta per una caratteristica se la scala serve meno di 7 piani sopraelevati.',
+      triggered: unit.table_c_multiLift ?? false,
+    },
+    {
+      id: 'd',
+      label: 'Scala di servizio non obbligatoria per legge',
+      detail: 'Tab. d) – scala di servizio non prescritta da leggi, regolamenti o necessità di prevenzione infortuni od incendi.',
+      triggered: unit.table_d_serviceStairs ?? false,
+    },
+    {
+      id: 'e',
+      label: 'Montacarichi o ascensore di servizio <4 piani',
+      detail: 'Tab. e) – montacarichi o ascensore di servizio al servizio di meno di 4 piani.',
+      triggered: unit.table_e_serviceElevator ?? false,
+    },
+    {
+      id: 'f',
+      label: 'Scala principale con rivestimenti pregiati (>170 cm di media)',
+      detail: 'Tab. f) – scala principale con pareti rivestite di materiali pregiati per altezza >170 cm di media, o con materiali lavorati in modo pregiato.',
+      triggered: unit.table_f_stairMaterials ?? false,
+    },
+    {
+      id: 'g',
+      label: 'Altezza libera netta del piano >3,30 m',
+      detail: 'Tab. g) – altezza libera netta del piano superiore a 3,30 m (salvo regolamenti edilizi locali che prevedano altezze minime superiori).',
+      triggered: unit.table_g_highCeilings ?? false,
+    },
+    {
+      id: 'h',
+      label: 'Porte d’ingresso agli appartamenti pregiate',
+      detail: 'Tab. h) – porte di ingresso agli appartamenti da scala interna in legno pregiato massello/lastronato; in legno intagliato/scolpito/intarsiato; o con decorazioni pregiate sovrapposte od impresse.',
+      triggered: unit.table_h_fancyDoors ?? false,
+    },
+    {
+      id: 'i',
+      label: 'Infissi interni pregiati (>50% della superficie totale infissi)',
+      detail: 'Tab. i) – infissi interni con caratteristiche pregiate come h), anche se tamburati, qualora la loro superficie superi il 50% della superficie totale degli infissi.',
+      triggered: unit.table_i_fancyInfissi ?? false,
+    },
+    {
+      id: 'l',
+      label: 'Pavimenti pregiati (>50% della superficie utile totale)',
+      detail: 'Tab. l) – pavimenti in materiale pregiato o lavorati in modo pregiato per superficie >50% della superficie utile totale dell’appartamento.',
+      triggered: unit.table_l_fancyFloors ?? false,
+    },
+    {
+      id: 'm',
+      label: 'Pareti con materiali pregiati/stoffe (>30% della superficie)',
+      detail: 'Tab. m) – pareti eseguite con materiali e lavori pregiati o rivestite di stoffe od altri materiali pregiati per oltre il 30% della loro superficie complessiva.',
+      triggered: unit.table_m_fancyWalls ?? false,
+    },
+    {
+      id: 'n',
+      label: 'Soffitti a cassettoni decorati o con stucchi dipinti a mano',
+      detail: 'Tab. n) – soffitti a cassettoni decorati oppure decorati con stucchi tirati sul posto dipinti a mano (escluse le piccole sagome di distacco fra pareti e soffitti).',
+      triggered: unit.table_n_decorCeilings ?? false,
+    },
+    {
+      id: 'o',
+      label: 'Piscina in muratura – edificio/complesso <15 unità immobiliari',
+      detail: 'Tab. o) – piscina coperta o scoperta in muratura al servizio di edificio o complesso con meno di 15 unità immobiliari.',
+      triggered: unit.table_o_condoPool ?? false,
+    },
+    {
+      id: 'p',
+      label: 'Campo da tennis – edificio/complesso <15 unità immobiliari',
+      detail: 'Tab. p) – campo da tennis al servizio di edificio o complesso con meno di 15 unità immobiliari.',
+      triggered: unit.table_p_condoTennis ?? false,
+    },
+  ];
+
+  const absoluteTriggered = absoluteCriteria.filter(c => c.triggered).length;
+  const tableTriggered = tableCriteria.filter(c => c.triggered).length;
+  const art8Triggered = tableTriggered > 4;
+  const isLuxury = absoluteTriggered > 0 || art8Triggered;
+
+  return {
+    ...dm1969Base,
+    surfaceMethod,
+    dmSurfaceMq,
+    ambiguousRoomWarnings,
+    isLuxury,
+    absoluteTriggered,
+    tableTriggered,
+    art8Triggered,
+    absoluteCriteria,
+    tableCriteria,
+  };
 }
 
 // ── Merge utility for fusion scenarios ──────────────────────────────────────
@@ -354,6 +546,8 @@ export function runScenario(params: {
   imuAliquota: number;
   imuIsMainHome: boolean;
   imuDetrazione: number;
+  luxuryCheckMode?: LuxuryCheckMode;
+  dataAtto?: string;
 }): ScenarioResult {
   const {
     scenarioId, scenarioName,
@@ -361,6 +555,7 @@ export function runScenario(params: {
     pertinenzaUnit, pertinenzaCategory, pertinenzaClass,
     enablePertinenza, tariffs, ruleSet,
     enableImu, imuAliquota, imuIsMainHome, imuDetrazione,
+    luxuryCheckMode = 'analisiDM1969', dataAtto,
   } = params;
 
   const warnings: string[] = [];
@@ -387,23 +582,27 @@ export function runScenario(params: {
       trace,
       missingTariff,
     };
-
-    // Risk: luxury surface
-    if (dwelling.trace.totalMq > 240) {
-      warnings.push(`Superficie utile ~${dwelling.trace.totalMq.toFixed(0)} m² > 240 m²: possibile abitazione di lusso (DM 2/8/1969 cr.1)`);
-    }
   }
 
   // ── Luxury analysis ────
   const luxuryAnalysis = analyzeLuxury(
     dwellingUnit,
-    dwelling?.trace.totalMq ?? 0,
-    dwelling?.trace.terrazzaMq ?? 0,
+    {
+      totalMq: dwelling?.trace.totalMq ?? 0,
+      terrazzaMq: dwelling?.trace.terrazzaMq ?? 0,
+      complementaryMq: dwelling?.trace.complementaryMq ?? 0,
+      excludedMq: dwelling?.trace.excludedMq ?? 0,
+    },
+    luxuryCheckMode,
+    dataAtto,
+    dwellingCategory,
   );
   if (luxuryAnalysis.isLuxury) {
-    const ids = luxuryAnalysis.criteria.filter(c => c.triggered).map(c => `cr.${c.id}`).join(', ');
-    const msg = `Possibile abitazione di lusso DM 2/8/1969 (${ids}) → verificare classamento in A/1, A/8 o A/9`;
-    if (!warnings.includes(msg)) warnings.push(msg);
+    const parts: string[] = [];
+    const absIds = luxuryAnalysis.absoluteCriteria.filter(c => c.triggered).map(c => `art.${c.id}`);
+    if (absIds.length > 0) parts.push(absIds.join(', '));
+    if (luxuryAnalysis.art8Triggered) parts.push(`art.8 (${luxuryAnalysis.tableTriggered}/14 caratteristiche tabella)`);
+    warnings.push(`Possibile abitazione di lusso DM 2/8/1969 (${parts.join(' + ')}) → verificare classamento in A/1, A/8 o A/9`);
   }
 
   // ── Pertinenza (Group C) ────

@@ -17,14 +17,38 @@ export const ROOM_TYPE_LABELS: Record<RoomType, string> = {
   Excluded: 'Escluso',
 };
 
+// ── Luxury check mode (regime giuridico) ─────────────────────────────────────
+/**
+ * Seleziona il regime con cui verificare la natura "di lusso" dell'abitazione.
+ *
+ * – primaCasaRegistro: dal 1/1/2014 conta la categoria catastale A/1, A/8, A/9
+ *   (D.Lgs. 23/2011 art. 10). Prima: applicare analisiDM1969.
+ *
+ * – primaCasaIVA: allineamento al criterio catastale dal 13/12/2014
+ *   (D.Lgs. 175/2014 art. 33). Per atti IVA ante-13/12/2014: D.M. 1969
+ *   (circ. AdE 2/E 2014 e 31/E 2014).
+ *
+ * – analisiDM1969: applica sempre il D.M. 2/8/1969 (analisi storica/generica).
+ */
+export type LuxuryCheckMode =
+  | 'primaCasaRegistro'  // Post 1/1/2014: categoria A/1 A/8 A/9 (D.Lgs. 23/2011 art. 10)
+  | 'primaCasaIVA'       // Post 13/12/2014: categoria A/1 A/8 A/9 (D.Lgs. 175/2014 art. 33)
+  | 'analisiDM1969';     // Sempre D.M. 2/8/1969 (analisi storica / generica)
+
+export const LUXURY_CHECK_MODE_LABELS: Record<LuxuryCheckMode, string> = {
+  primaCasaRegistro: 'Prima casa – Imposta di Registro (atti dal 1/1/2014)',
+  primaCasaIVA: 'Prima casa – IVA/Cessione (atti dal 13/12/2014)',
+  analisiDM1969: 'Analisi D.M. 2/8/1969 (storica / generica)',
+};
+
 export interface Room {
   id: string;
   name: string;
   roomType: RoomType;
   areaMq: number;
   notes: string;
-  luxuryMaterials?: boolean; // DM 2/8/1969 – cr.5: finiture di pregio (marmi, legni nobili…)
-  centralHeating?: boolean;  // DM 2/8/1969 – cr.6: riscaldamento centralizzato in questo locale
+  accessoDaInterno?: boolean;    // Vano raggiungibile dall'interno (indicatore di "utilizzabilità" Cass. 2503/2025)
+  impiantiPresenti?: boolean;    // Impianti idraulici/termici presenti (indicatore di "utilizzabilità")
 }
 
 // ── Floor ─────────────────────────────────────────────────────────────────────
@@ -56,10 +80,29 @@ export interface Unit {
   targetCategory: string;
   targetClass: string;
   floors: Floor[];
-  hasPool?: boolean;        // DM 2/8/1969 – cr.3: piscina scoperta ≥ 80 m² o maneggio
-  hasPrivateLift?: boolean; // DM 2/8/1969 – cr.4: ascensore al servizio di <4 appartamenti
-  isVilla?: boolean;        // DM 2/8/1969 – cr.7: villa unifamiliare con giardino
-  gardenMq?: number;        // DM 2/8/1969 – cr.7: superficie giardino in m²
+  superficieGlobaleAttoMq?: number;  // Superficie globale come da atto (formula Cass. 29643/2019: SU = globale − escl.)
+  // ── DM 2 agosto 1969: Criteri assoluti (Art. 1–7) – basta uno solo ──────────
+  art1_luxuryZone?: boolean;          // Art. 1: zona urb. "ville", "parco privato" o "di lusso"
+  art2_largeLot?: boolean;            // Art. 2: lotto unifamiliare con prescrizione ≥ 3.000 m²
+  art3_lowDensity?: boolean;          // Art. 3: cubatura fabbricato >2.000 mc e densità <25 mc/100 m²
+  art4_pool?: boolean;                // Art. 4: abitazione unifamiliare con piscina ≥ 80 m²
+  art4_tennis?: boolean;              // Art. 4: abitazione unifamiliare con campo tennis ≥ 650 m²
+  art5_villa?: boolean;               // Art. 5: casa unifamiliare >200 m² con giardino >6× area coperta
+  gardenMq?: number;                  // Art. 5: superficie giardino/area scoperta di pertinenza in m²
+  art7_expensiveLand?: boolean;       // Art. 7: costo terreno coperto >1,5× costo costruzione
+  // ── DM 2 agosto 1969: Caratteristiche tabella (Art. 8) – servono PIÙ DI 4 ──
+  table_c_multiLift?: boolean;        // Tab. c): più di 1 ascensore per scala (<7 piani sopraelevati)
+  table_d_serviceStairs?: boolean;    // Tab. d): scala di servizio non prescritta da legge
+  table_e_serviceElevator?: boolean;  // Tab. e): montacarichi o ascensore di servizio <4 piani
+  table_f_stairMaterials?: boolean;   // Tab. f): scala principale con rivestimenti pregiati (>170 cm)
+  table_g_highCeilings?: boolean;     // Tab. g): altezza libera netta piano > 3,30 m
+  table_h_fancyDoors?: boolean;       // Tab. h): porte d'ingresso in legno pregiato/intagliato
+  table_i_fancyInfissi?: boolean;     // Tab. i): infissi interni pregiati se >50% sup. totale
+  table_l_fancyFloors?: boolean;      // Tab. l): pavimenti pregiati per >50% sup. utile totale
+  table_m_fancyWalls?: boolean;       // Tab. m): pareti pregiate/stoffe per >30% sup. complessiva
+  table_n_decorCeilings?: boolean;    // Tab. n): soffitti a cassettoni decorati o stucchi dipinti
+  table_o_condoPool?: boolean;        // Tab. o): piscina in muratura edificio/complesso <15 unità
+  table_p_condoTennis?: boolean;      // Tab. p): campo da tennis edificio/complesso <15 unità
 }
 
 // ── Tariff ───────────────────────────────────────────────────────────────────
@@ -100,6 +143,8 @@ export interface Scenario {
   imuAliquota: number;       // e.g. 0.0076 for 0.76%
   imuIsMainHome: boolean;
   imuDetrazione: number;     // euro
+  luxuryCheckMode?: LuxuryCheckMode;  // Regime lusso (default: analisiDM1969)
+  dataAtto?: string;                   // Data atto ISO YYYY-MM-DD (per routing post-2014)
 }
 
 // ── RuleSet ───────────────────────────────────────────────────────────────────

@@ -100,7 +100,11 @@ function ScenarioDialog({ open, initial, onClose, onSave }: ScenarioDialogProps)
   }
 
   function handleSave() {
-    if (!form.name.trim() || !form.dwellingUnitId) return;
+    const valid = form.name.trim() &&
+      ((form.isFusion ?? false)
+        ? (form.fusionUnitIds ?? []).length >= 2
+        : !!form.dwellingUnitId);
+    if (!valid) return;
     onSave({ ...form, name: form.name.trim() });
     handleClose();
   }
@@ -125,63 +129,162 @@ function ScenarioDialog({ open, initial, onClose, onSave }: ScenarioDialogProps)
             (es. categoria attuale vs categoria prevista dopo la fusione).
           </Alert>
 
-          {/* ── Abitazione ──────────────────────────────────────────── */}
+          {/* ── Abitazione / Accorpamento ────────────────────────── */}
           <Paper variant="outlined" sx={{ p: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
               <Typography variant="subtitle2" fontWeight={700}>
                 Abitazione Principale (Gruppo A)
               </Typography>
               <InfoTooltip text="Categoria: leggi dalla visura catastale attuale (es. 'A/3') oppure scegli la categoria che pensi verrà assegnata post-fusione. Per confronto: A/1=signorile, A/2=civile, A/3=economica, A/4=popolare, A/5=ultrapopolare, A/6=rurale, A/7=villini, A/8=ville, A/9=castelli. Classe: 1=peggio, usualmente 3–5=ottimo nella zona." />
+              <Box sx={{ ml: 'auto' }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      size="small"
+                      checked={form.isFusion ?? false}
+                      onChange={e => set('isFusion', e.target.checked)}
+                    />
+                  }
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <CallMergeIcon fontSize="small" />
+                      <Typography variant="body2">Accorpamento</Typography>
+                    </Box>
+                  }
+                />
+              </Box>
             </Box>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={4}>
-                <FormControl fullWidth>
-                  <InputLabel>Unità</InputLabel>
-                  <Select
-                    value={form.dwellingUnitId}
-                    label="Unità"
-                    onChange={e => set('dwellingUnitId', e.target.value)}
-                  >
-                    {dwellingUnits.length === 0 && (
-                      <MenuItem value="" disabled>Nessuna unità abitazione</MenuItem>
-                    )}
-                    {dwellingUnits.map(u => (
-                      <MenuItem key={u.id} value={u.id}>
-                        {u.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+
+            {/* Modalità accorpamento: multi-select unità */}
+            {(form.isFusion ?? false) ? (
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <FormControl fullWidth>
+                    <InputLabel>Unità da accorpare (min. 2)</InputLabel>
+                    <Select
+                      multiple
+                      value={form.fusionUnitIds ?? []}
+                      label="Unità da accorpare (min. 2)"
+                      onChange={e => {
+                        const v = e.target.value;
+                        set('fusionUnitIds', typeof v === 'string' ? v.split(',') : v);
+                      }}
+                      renderValue={selected => (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {(selected as string[]).map(id => (
+                            <Chip
+                              key={id}
+                              label={dwellingUnits.find(u => u.id === id)?.name ?? id}
+                              size="small"
+                              icon={<CallMergeIcon />}
+                              color="warning"
+                            />
+                          ))}
+                        </Box>
+                      )}
+                    >
+                      {dwellingUnits.length === 0 && (
+                        <MenuItem value="" disabled>Nessuna unità disponibile</MenuItem>
+                      )}
+                      {dwellingUnits.map(u => (
+                        <MenuItem key={u.id} value={u.id}>
+                          <Checkbox checked={(form.fusionUnitIds ?? []).includes(u.id)} />
+                          {u.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  {(form.fusionUnitIds ?? []).length >= 2 && (
+                    <Alert severity="info" sx={{ mt: 1, py: 0.5 }}>
+                      Le unità selezionate verranno trattate come un'unica unità accorpata:
+                      tutti i vani confluiscono nel calcolo della consistenza e dell'analisi lusso.
+                    </Alert>
+                  )}
+                  {(form.fusionUnitIds ?? []).length === 1 && (
+                    <Alert severity="warning" sx={{ mt: 1, py: 0.5 }}>Seleziona almeno 2 unità per l'accorpamento.</Alert>
+                  )}
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Categoria risultante</InputLabel>
+                    <Select
+                      value={form.dwellingCategory}
+                      label="Categoria risultante"
+                      onChange={e => set('dwellingCategory', e.target.value)}
+                    >
+                      {CATEGORY_OPTIONS_A.map(c => (
+                        <MenuItem key={c} value={c}>{c}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Classe risultante</InputLabel>
+                    <Select
+                      value={form.dwellingClass}
+                      label="Classe risultante"
+                      onChange={e => set('dwellingClass', e.target.value)}
+                    >
+                      {CLASS_OPTIONS.map(c => (
+                        <MenuItem key={c} value={c}>{c}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
               </Grid>
-              <Grid item xs={12} md={4}>
-                <FormControl fullWidth>
-                  <InputLabel>Categoria</InputLabel>
-                  <Select
-                    value={form.dwellingCategory}
-                    label="Categoria"
-                    onChange={e => set('dwellingCategory', e.target.value)}
-                  >
-                    {CATEGORY_OPTIONS_A.map(c => (
-                      <MenuItem key={c} value={c}>{c}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+            ) : (
+              /* Modalità singola unità */
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth>
+                    <InputLabel>Unità</InputLabel>
+                    <Select
+                      value={form.dwellingUnitId}
+                      label="Unità"
+                      onChange={e => set('dwellingUnitId', e.target.value)}
+                    >
+                      {dwellingUnits.length === 0 && (
+                        <MenuItem value="" disabled>Nessuna unità abitazione</MenuItem>
+                      )}
+                      {dwellingUnits.map(u => (
+                        <MenuItem key={u.id} value={u.id}>
+                          {u.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth>
+                    <InputLabel>Categoria</InputLabel>
+                    <Select
+                      value={form.dwellingCategory}
+                      label="Categoria"
+                      onChange={e => set('dwellingCategory', e.target.value)}
+                    >
+                      {CATEGORY_OPTIONS_A.map(c => (
+                        <MenuItem key={c} value={c}>{c}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth>
+                    <InputLabel>Classe</InputLabel>
+                    <Select
+                      value={form.dwellingClass}
+                      label="Classe"
+                      onChange={e => set('dwellingClass', e.target.value)}
+                    >
+                      {CLASS_OPTIONS.map(c => (
+                        <MenuItem key={c} value={c}>{c}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
               </Grid>
-              <Grid item xs={12} md={4}>
-                <FormControl fullWidth>
-                  <InputLabel>Classe</InputLabel>
-                  <Select
-                    value={form.dwellingClass}
-                    label="Classe"
-                    onChange={e => set('dwellingClass', e.target.value)}
-                  >
-                    {CLASS_OPTIONS.map(c => (
-                      <MenuItem key={c} value={c}>{c}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-            </Grid>
+            )}
           </Paper>
 
           {/* ── Pertinenza ──────────────────────────────────────────── */}

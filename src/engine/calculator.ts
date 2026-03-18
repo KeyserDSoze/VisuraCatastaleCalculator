@@ -516,6 +516,13 @@ function analyzeLuxury(
 // ── Merge utility for fusion scenarios ──────────────────────────────────────
 
 export function mergeUnits(units: Unit[]): Unit {
+  const globalMqValues = units
+    .map(u => u.superficieGlobaleAttoMq)
+    .filter((v): v is number => v != null && v > 0);
+  const mergedGlobalMq = globalMqValues.length > 0
+    ? globalMqValues.reduce((a, b) => a + b, 0)
+    : undefined;
+
   return {
     id: 'fusion_' + units.map(u => u.id).join('_'),
     name: units.map(u => u.name).join(' + '),
@@ -523,6 +530,28 @@ export function mergeUnits(units: Unit[]): Unit {
     targetCategory: units[0]?.targetCategory ?? 'A/3',
     targetClass: units[0]?.targetClass ?? '1',
     floors: units.flatMap(u => u.floors),
+    superficieGlobaleAttoMq: mergedGlobalMq,
+    // Merge luxury boolean flags from all units (any = true)
+    art1_luxuryZone: units.some(u => u.art1_luxuryZone),
+    art2_largeLot: units.some(u => u.art2_largeLot),
+    art3_lowDensity: units.some(u => u.art3_lowDensity),
+    art4_pool: units.some(u => u.art4_pool),
+    art4_tennis: units.some(u => u.art4_tennis),
+    art5_villa: units.some(u => u.art5_villa),
+    art7_expensiveLand: units.some(u => u.art7_expensiveLand),
+    gardenMq: units.reduce((acc, u) => acc + (u.gardenMq ?? 0), 0) || undefined,
+    table_c_multiLift: units.some(u => u.table_c_multiLift),
+    table_d_serviceStairs: units.some(u => u.table_d_serviceStairs),
+    table_e_serviceElevator: units.some(u => u.table_e_serviceElevator),
+    table_f_stairMaterials: units.some(u => u.table_f_stairMaterials),
+    table_g_highCeilings: units.some(u => u.table_g_highCeilings),
+    table_h_fancyDoors: units.some(u => u.table_h_fancyDoors),
+    table_i_fancyInfissi: units.some(u => u.table_i_fancyInfissi),
+    table_l_fancyFloors: units.some(u => u.table_l_fancyFloors),
+    table_m_fancyWalls: units.some(u => u.table_m_fancyWalls),
+    table_n_decorCeilings: units.some(u => u.table_n_decorCeilings),
+    table_o_condoPool: units.some(u => u.table_o_condoPool),
+    table_p_condoTennis: units.some(u => u.table_p_condoTennis),
   };
 }
 

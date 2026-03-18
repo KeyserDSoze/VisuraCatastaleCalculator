@@ -109,12 +109,15 @@ export interface ScenarioResult {
   pertinenza?: RenditaResult;
   renditaTotale: number;
   imuBase?: number;
-  imuEstimate?: number;
+  imuEstimate?: number;        // IMU effettiva (0 se esente prima casa)
+  imuIfSecondHome?: number;    // IMU teorica come seconda casa (nessun esonero, nessuna detrazione)
   warnings: string[];
   flags: {
     luxuryAnalysis: LuxuryAnalysis; // DM 2 agosto 1969 – tutti i criteri
     imuAtRisk: boolean;             // category A/1 A/8 A/9
     pertinenzaAgevolabile: boolean;
+    imuIsMainHome: boolean;         // true = prima casa dichiarata
+    imuExempt: boolean;             // true = esente (prima casa non lusso)
   };
 }
 
@@ -257,16 +260,18 @@ export function calculateImu(
   aliquota: number,
   isMainHome: boolean,
   detrazione: number,
-): { base: number; imu: number } {
+): { base: number; imu: number; imuIfSecondHome: number; exempt: boolean } {
   const moltiplicatore = category === 'C/1' ? 55 : 160;
   const base = rendita * 1.05 * moltiplicatore;
+  // Valore teorico come seconda casa: stessa aliquota, nessuna detrazione, nessun esonero
+  const imuIfSecondHome = Math.max(0, base * aliquota);
 
   // Main home exemption: only luxury categories pay IMU even as main home
   if (isMainHome && !IMU_LUXURY.includes(category)) {
-    return { base, imu: 0 };
+    return { base, imu: 0, imuIfSecondHome, exempt: true };
   }
 
-  return { base, imu: Math.max(0, base * aliquota - detrazione) };
+  return { base, imu: Math.max(0, base * aliquota - detrazione), imuIfSecondHome, exempt: false };
 }
 
 // ── Luxury analysis (DM 2 agosto 1969 / regime catastale) ────────────────────
@@ -674,11 +679,15 @@ export function runScenario(params: {
   // ── IMU ────
   let imuBase: number | undefined;
   let imuEstimate: number | undefined;
+  let imuIfSecondHome: number | undefined;
+  let imuExempt = false;
 
   if (enableImu && dwellingUnit) {
     const result = calculateImu(renditaTotale, dwellingCategory, imuAliquota, imuIsMainHome, imuDetrazione);
     imuBase = result.base;
     imuEstimate = result.imu;
+    imuIfSecondHome = result.imuIfSecondHome;
+    imuExempt = result.exempt;
   }
 
   return {
@@ -689,7 +698,8 @@ export function runScenario(params: {
     renditaTotale,
     imuBase,
     imuEstimate,
+    imuIfSecondHome,
     warnings,
-    flags: { luxuryAnalysis, imuAtRisk, pertinenzaAgevolabile },
+    flags: { luxuryAnalysis, imuAtRisk, pertinenzaAgevolabile, imuIsMainHome, imuExempt },
   };
 }

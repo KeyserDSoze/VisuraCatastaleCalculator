@@ -396,16 +396,35 @@ function ScenarioCard({ result, isFusion, fusionUnitNames }: {
                 sx={{
                   p: 1.5,
                   textAlign: 'center',
-                  bgcolor: result.imuEstimate === 0 ? 'success.light' : 'warning.light',
+                  bgcolor: result.flags.imuExempt ? 'success.light' : 'warning.light',
                 }}
               >
-                <Typography variant="caption" color="text.secondary">IMU stimata</Typography>
-                <Typography variant="h6">
-                  {result.imuEstimate === 0 ? 'ESENTE' : eur(result.imuEstimate)}
+                <Typography variant="caption" color="text.secondary">
+                  IMU stimata{result.flags.imuIsMainHome ? ' — prima casa' : ' — seconda casa'}
+                </Typography>
+                <Typography variant="h6" color={result.flags.imuExempt ? 'success.dark' : 'warning.dark'}>
+                  {result.flags.imuExempt ? 'ESENTE' : eur(result.imuEstimate)}
                 </Typography>
                 {result.imuBase !== undefined && (
-                  <Typography variant="caption">
-                    Base: {eur(result.imuBase)}
+                  <Typography variant="caption" display="block" color="text.secondary">
+                    Base imponibile: {eur(result.imuBase)}
+                  </Typography>
+                )}
+                {result.flags.imuExempt && result.imuIfSecondHome != null && result.imuIfSecondHome > 0 && (
+                  <Tooltip title="Valore calcolato con stessa aliquota, senza detrazione e senza esonero prima casa">
+                    <Typography
+                      variant="caption"
+                      display="block"
+                      color="text.secondary"
+                      sx={{ mt: 0.5, borderTop: '1px dashed', borderColor: 'divider', pt: 0.5, cursor: 'help' }}
+                    >
+                      Se seconda casa: ~{eur(result.imuIfSecondHome)}
+                    </Typography>
+                  </Tooltip>
+                )}
+                {!result.flags.imuExempt && result.flags.imuIsMainHome && (
+                  <Typography variant="caption" display="block" color="warning.dark" sx={{ mt: 0.5 }}>
+                    Categoria di lusso: IMU dovuta anche come prima casa
                   </Typography>
                 )}
               </Paper>
@@ -506,8 +525,12 @@ function ComparisonTable({ results }: { results: ScenarioResult[] }) {
                 </TableCell>
                 <TableCell align="right">
                   {r.imuEstimate !== undefined
-                    ? r.imuEstimate === 0
-                      ? <Chip label="ESENTE" size="small" color="success" />
+                    ? r.flags.imuExempt
+                      ? (
+                        <Tooltip title={r.imuIfSecondHome ? `Come seconda casa: ~${eur(r.imuIfSecondHome)}` : 'Prima casa non di lusso'}>
+                          <Chip label="ESENTE" size="small" color="success" sx={{ cursor: 'help' }} />
+                        </Tooltip>
+                      )
                       : eur(r.imuEstimate)
                     : '—'}
                 </TableCell>

@@ -363,59 +363,83 @@ function ScenarioDialog({ open, initial, onClose, onSave }: ScenarioDialogProps)
               label={<Typography variant="subtitle2" fontWeight={700}>Stima IMU</Typography>}
             />
             {form.enableImu && (
-              <Grid container spacing={2} sx={{ mt: 0.5 }}>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    label="Aliquota IMU (%)"
-                    type="number"
-                    inputProps={{ step: '0.01', min: '0', max: '10.6' }}
-                    value={(form.imuAliquota * 100).toFixed(2)}
-                    onChange={e => {
-                      const v = parseFloat(e.target.value);
-                      if (!isNaN(v)) set('imuAliquota', v / 100);
-                    }}
-                    helperText="Trovala nella delibera comunale IMU del tuo Comune"
-                    InputProps={{
-                      endAdornment: (
-                        <InfoTooltip text="L'aliquota IMU è fissata ogni anno dalla delibera comunale. Cercala sul sito del tuo Comune, sezione 'Tributi / IMU', oppure sul portale del MEF (finanze.gov.it → fiscalità locale). L'aliquota base di legge è 0.76% (7.6‰). I Comuni possono modificarla entro i limiti di legge. Per 'abitazione principale' le categorie A/2–A/7 sono di norma esenti da IMU; A/1, A/8, A/9 pagano IMU anche come abitazione principale." />
-                      ),
-                    }}
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    label="Detrazione IMU (€)"
-                    type="number"
-                    inputProps={{ step: '50', min: '0' }}
-                    value={form.imuDetrazione}
-                    onChange={e => {
-                      const v = parseFloat(e.target.value);
-                      if (!isNaN(v)) set('imuDetrazione', v);
-                    }}
-                    helperText="200 € fissi per legge per le cat. A/1, A/8, A/9 (abitaz. principale)"
-                    InputProps={{
-                      endAdornment: (
-                        <InfoTooltip text="La detrazione di 200 € è prevista per legge solo per le categorie A/1, A/8 e A/9 usate come abitazione principale. Per le altre categorie A/2–A/7 l'IMU è normalmente assente se è abitazione principale, quindi la detrazione non si applica. Inserisci 0 se non applicabile." />
-                      ),
-                    }}
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={form.imuIsMainHome}
-                        onChange={e => set('imuIsMainHome', e.target.checked)}
+              <Box sx={{ mt: 0.5 }}>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Aliquota IMU (%)"
+                      type="number"
+                      inputProps={{ step: '0.01', min: '0', max: '10.6' }}
+                      value={(form.imuAliquota * 100).toFixed(2)}
+                      onChange={e => {
+                        const v = parseFloat(e.target.value);
+                        if (!isNaN(v)) set('imuAliquota', v / 100);
+                      }}
+                      helperText="Trovala nella delibera comunale IMU del tuo Comune"
+                      InputProps={{
+                        endAdornment: (
+                          <InfoTooltip text="L'aliquota IMU è fissata ogni anno dalla delibera comunale. Cercala sul sito del tuo Comune, sezione 'Tributi / IMU', oppure sul portale del MEF (finanze.gov.it → fiscalità locale). L'aliquota base di legge è 0.76% (7.6‰). I Comuni possono modificarla entro i limiti di legge. Per 'abitazione principale' le categorie A/2–A/7 sono di norma esenti da IMU; A/1, A/8, A/9 pagano IMU anche come abitazione principale." />
+                        ),
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Detrazione IMU (€)"
+                      type="number"
+                      inputProps={{ step: '50', min: '0' }}
+                      value={form.imuDetrazione}
+                      onChange={e => {
+                        const v = parseFloat(e.target.value);
+                        if (!isNaN(v)) set('imuDetrazione', v);
+                      }}
+                      helperText="200 € fissi per legge per le cat. A/1, A/8, A/9 (abitaz. principale)"
+                      InputProps={{
+                        endAdornment: (
+                          <InfoTooltip text="La detrazione di 200 € è prevista per legge solo per le categorie A/1, A/8 e A/9 usate come abitazione principale. Per le altre categorie A/2–A/7 l'IMU è normalmente assente se è abitazione principale, quindi la detrazione non si applica. Inserisci 0 se non applicabile." />
+                        ),
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Box>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={form.imuIsMainHome}
+                            onChange={e => set('imuIsMainHome', e.target.checked)}
+                          />
+                        }
+                        label={
+                          <Typography variant="body2" fontWeight={600}>
+                            {form.imuIsMainHome ? 'Prima casa' : 'Seconda casa / altro'}
+                          </Typography>
+                        }
                       />
-                    }
-                    label="Abitazione principale"
-                  />
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 5.5, mt: -0.5 }}>
+                        {form.imuIsMainHome
+                          ? 'A/2–A/7 sono esenti; A/1, A/8, A/9 pagano IMU'
+                          : 'IMU sempre dovuta, nessun esonero'}
+                      </Typography>
+                    </Box>
+                  </Grid>
                 </Grid>
-              </Grid>
+                {form.imuIsMainHome && !['A/1','A/8','A/9'].includes(form.dwellingCategory) && (
+                  <Alert severity="success" sx={{ mt: 1, py: 0.5 }}>
+                    <strong>Prima casa {form.dwellingCategory}</strong>: normalmente ESENTE da IMU.
+                    Il calcolatore mostrerà anche il valore teorico come seconda casa.
+                  </Alert>
+                )}
+                {!form.imuIsMainHome && (
+                  <Alert severity="warning" sx={{ mt: 1, py: 0.5 }}>
+                    <strong>Seconda casa</strong>: IMU sempre dovuta con l'aliquota inserita, senza esoneri.
+                  </Alert>
+                )}
+              </Box>
             )}
-          </Paper>
+        </Paper>
 
           {/* ── Analisi Lusso ────────────────────────────────── */}
           <Paper variant="outlined" sx={{ p: 2 }}>

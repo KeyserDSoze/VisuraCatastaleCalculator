@@ -5,6 +5,7 @@ export type RoomType =
   | 'Kitchen'                // Cucina con impianti
   | 'AccessoryDirect'        // Accessori diretti: bagno, ingresso, corridoio → 1/3
   | 'AccessoryComplementary' // Accessori complementari: cantina, soffitta → 1/4
+  | 'Terrazzo'               // Terrazza/balcone – 0 vani, area rilevante per DM 2/8/1969
   | 'Excluded';              // Escluso dal computo
 
 export const ROOM_TYPE_LABELS: Record<RoomType, string> = {
@@ -12,6 +13,7 @@ export const ROOM_TYPE_LABELS: Record<RoomType, string> = {
   Kitchen: 'Cucina',
   AccessoryDirect: 'Accessorio diretto (1/3)',
   AccessoryComplementary: 'Accessorio complementare (1/4)',
+  Terrazzo: 'Terrazzo/Balcone',
   Excluded: 'Escluso',
 };
 
@@ -21,6 +23,8 @@ export interface Room {
   roomType: RoomType;
   areaMq: number;
   notes: string;
+  luxuryMaterials?: boolean; // DM 2/8/1969 – cr.5: finiture di pregio (marmi, legni nobili…)
+  centralHeating?: boolean;  // DM 2/8/1969 – cr.6: riscaldamento centralizzato in questo locale
 }
 
 // ── Floor ─────────────────────────────────────────────────────────────────────
@@ -52,6 +56,10 @@ export interface Unit {
   targetCategory: string;
   targetClass: string;
   floors: Floor[];
+  hasPool?: boolean;        // DM 2/8/1969 – cr.3: piscina scoperta ≥ 80 m² o maneggio
+  hasPrivateLift?: boolean; // DM 2/8/1969 – cr.4: ascensore al servizio di <4 appartamenti
+  isVilla?: boolean;        // DM 2/8/1969 – cr.7: villa unifamiliare con giardino
+  gardenMq?: number;        // DM 2/8/1969 – cr.7: superficie giardino in m²
 }
 
 // ── Tariff ───────────────────────────────────────────────────────────────────
@@ -79,6 +87,8 @@ export interface Tariff {
 export interface Scenario {
   id: string;
   name: string;
+  isFusion?: boolean;        // true = accorpamento di più unità
+  fusionUnitIds?: string[];  // IDs delle unità da fondere
   dwellingUnitId: string;
   dwellingCategory: string;
   dwellingClass: string;

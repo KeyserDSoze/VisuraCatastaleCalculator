@@ -16,6 +16,10 @@ import {
   Select,
   MenuItem,
   FormControl,
+  FormGroup,
+  FormControlLabel,
+  Checkbox,
+  Switch,
   InputLabel,
   Table,
   TableHead,
@@ -44,6 +48,7 @@ import {
   CLASS_OPTIONS,
   RoomType,
   ROOM_TYPE_LABELS,
+  Room,
 } from '../models/types';
 
 // ── Room type chip colors ──────────────────────────────────────────────────────
@@ -56,6 +61,7 @@ const ROOM_CHIP_COLORS: Record<
   Kitchen: 'success',
   AccessoryDirect: 'info',
   AccessoryComplementary: 'secondary',
+  Terrazzo: 'warning',
   Excluded: 'default',
 };
 
@@ -182,9 +188,9 @@ function UnitDialog({ open, initial, onClose, onSave }: UnitDialogProps) {
 interface RoomDialogProps {
   open: boolean;
   title: string;
-  initial?: { name?: string; roomType?: RoomType; areaMq?: number; notes?: string };
+  initial?: { name?: string; roomType?: RoomType; areaMq?: number; notes?: string; luxuryMaterials?: boolean; centralHeating?: boolean };
   onClose: () => void;
-  onSave: (name: string, roomType: RoomType, areaMq: number, notes: string) => void;
+  onSave: (name: string, roomType: RoomType, areaMq: number, notes: string, luxuryMaterials: boolean, centralHeating: boolean) => void;
 }
 
 function RoomDialog({ open, title, initial, onClose, onSave }: RoomDialogProps) {
@@ -192,19 +198,23 @@ function RoomDialog({ open, title, initial, onClose, onSave }: RoomDialogProps) 
   const [roomType, setRoomType] = useState<RoomType>(initial?.roomType ?? 'Main');
   const [areaMq, setAreaMq] = useState(initial?.areaMq?.toString() ?? '');
   const [notes, setNotes] = useState(initial?.notes ?? '');
+  const [luxuryMaterials, setLuxuryMaterials] = useState(initial?.luxuryMaterials ?? false);
+  const [centralHeating, setCentralHeating] = useState(initial?.centralHeating ?? false);
 
   function handleClose() {
     setName(initial?.name ?? '');
     setRoomType(initial?.roomType ?? 'Main');
     setAreaMq(initial?.areaMq?.toString() ?? '');
     setNotes(initial?.notes ?? '');
+    setLuxuryMaterials(initial?.luxuryMaterials ?? false);
+    setCentralHeating(initial?.centralHeating ?? false);
     onClose();
   }
 
   function handleSave() {
     const area = parseFloat(areaMq);
     if (!name.trim() || isNaN(area) || area <= 0) return;
-    onSave(name.trim(), roomType, area, notes);
+    onSave(name.trim(), roomType, area, notes, luxuryMaterials, centralHeating);
     handleClose();
   }
 
@@ -236,11 +246,12 @@ function RoomDialog({ open, title, initial, onClose, onSave }: RoomDialogProps) 
             </Select>
           </FormControl>
           <Alert severity="info" sx={{ py: 0.5 }}>
-            <strong>Principale</strong>: soggiorni, camere da letto, studi, sale → 1 vano ciascuno.<br />
-            <strong>Cucina</strong>: cucina abitabile con impianti fissi → 1 vano (come principale).<br />
-            <strong>Accessorio diretto</strong>: bagni, ingressi, corridoi, disimpegni, ripostigli di servizio → contato 1/3 di vano.<br />
-            <strong>Accessorio complementare</strong>: cantine, soffitte, sgomberi a sé → contato 1/4 di vano.<br />
-            <strong>Escluso</strong>: spazi non computabili (es. vano scala condominiale, locale tecnico).
+            <strong>Principale</strong>: soggiorni, camere da letto, studi, sale → 1 vano.<br />
+            <strong>Cucina</strong>: cucina abitabile con impianti fissi → 1 vano.<br />
+            <strong>Accessorio diretto</strong>: bagni, ingressi, corridoi, disimpegni → 1/3 vano.<br />
+            <strong>Accessorio complementare</strong>: cantine, soffitte, sgomberi → 1/4 vano.<br />
+            <strong>Terrazzo/Balcone</strong>: terrazze e balconi → 0 vani; l'area è tracciata per la verifica del criterio 2 del DM 2/8/1969 (lusso se &gt; 65 m²).<br />
+            <strong>Escluso</strong>: spazi non computabili (vano scala condominiale, locale tecnico).
           </Alert>
           <TextField
             fullWidth
@@ -266,6 +277,53 @@ function RoomDialog({ open, title, initial, onClose, onSave }: RoomDialogProps) 
             placeholder="es. 'balcone comunicante', 'altezza ridotta 2.20 m', 'finestra doppia esposizione'"
             helperText="Campo facoltativo per annotazioni utili al calcolo o alla verifica"
           />
+
+          {/* ── Luxury flags (DM 2/8/1969) ── */}
+          <Divider />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="subtitle2" color="warning.dark" fontWeight={700}>
+              Caratteristiche di lusso – questo vano (DM 2/8/1969)
+            </Typography>
+            <InfoTooltip text="Queste spunte fanno parte dell'analisi automatica dei criteri di lusso previsti dal DM 2 agosto 1969. Un'abitazione è considerata 'di lusso' se soddisfa almeno uno dei 7 criteri elencati, con conseguenza di non poter beneficiare delle agevolazioni prima casa né dell'esenzione IMU come abitazione principale." />
+          </Box>
+          <FormGroup>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  size="small"
+                  checked={luxuryMaterials}
+                  onChange={e => setLuxuryMaterials(e.target.checked)}
+                />
+              }
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Typography variant="body2">Criterio 5 – Materiali di pregio</Typography>
+                  <InfoTooltip
+                    size="small"
+                    text="Spunta se questo vano ha finiture di pregio: pavimenti o rivestimenti in marmo, granito o pietre naturali pregiate; parquet in legno nobile; stucchi decorativi, boiserie o controsoffitti decorativi. Basta UN solo vano con materiali di pregio nell'intera unità per innescare il criterio di lusso."
+                  />
+                </Box>
+              }
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  size="small"
+                  checked={centralHeating}
+                  onChange={e => setCentralHeating(e.target.checked)}
+                />
+              }
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Typography variant="body2">Criterio 6 – Riscaldamento centralizzato</Typography>
+                  <InfoTooltip
+                    size="small"
+                    text="Il 'riscaldamento centralizzato' nel senso del DM 2/8/1969 indica un impianto fisso di riscaldamento (radiatori, pavimento radiante, fan-coil ecc.) presente in questo locale. ATTENZIONE: il criterio di lusso scatta solo se TUTTI i locali abitabili dell'unità hanno questa spunta attiva — non basta che solo alcuni la abbiano."
+                  />
+                </Box>
+              }
+            />
+          </FormGroup>
         </Box>
       </DialogContent>
       <DialogActions>
@@ -286,17 +344,17 @@ function RoomDialog({ open, title, initial, onClose, onSave }: RoomDialogProps) 
 
 interface FloorSectionProps {
   unitId: string;
-  floor: { id: string; name: string; rooms: { id: string; name: string; roomType: RoomType; areaMq: number; notes: string }[] };
+  floor: { id: string; name: string; rooms: Room[] };
 }
 
 function FloorSection({ unitId, floor }: FloorSectionProps) {
   const { addRoom, updateRoom, deleteRoom, updateFloor, deleteFloor } = useProject();
   const [addRoomOpen, setAddRoomOpen] = useState(false);
-  const [editRoom, setEditRoom] = useState<{ id: string; name: string; roomType: RoomType; areaMq: number; notes: string } | null>(null);
+  const [editRoom, setEditRoom] = useState<Room | null>(null);
   const [editingFloorName, setEditingFloorName] = useState(false);
   const [floorNameVal, setFloorNameVal] = useState(floor.name);
 
-  const totalMq = floor.rooms.filter(r => r.roomType !== 'Excluded').reduce((s, r) => s + r.areaMq, 0);
+  const totalMq = floor.rooms.filter(r => r.roomType !== 'Excluded' && r.roomType !== 'Terrazzo').reduce((s, r) => s + r.areaMq, 0);
 
   return (
     <Box sx={{ mb: 1 }}>
@@ -361,7 +419,7 @@ function FloorSection({ unitId, floor }: FloorSectionProps) {
                 <TableCell><strong>Vano</strong></TableCell>
                 <TableCell><strong>Tipo</strong></TableCell>
                 <TableCell align="right"><strong>m²</strong></TableCell>
-                <TableCell><strong>Note</strong></TableCell>
+                <TableCell><strong>Note / Lusso</strong></TableCell>
                 <TableCell align="center"><strong>Azioni</strong></TableCell>
               </TableRow>
             </TableHead>
@@ -377,8 +435,20 @@ function FloorSection({ unitId, floor }: FloorSectionProps) {
                     />
                   </TableCell>
                   <TableCell align="right">{room.areaMq.toFixed(1)}</TableCell>
-                  <TableCell sx={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {room.notes}
+                  <TableCell sx={{ maxWidth: 200 }}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {room.notes && (
+                        <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                          {room.notes}
+                        </Typography>
+                      )}
+                      {room.luxuryMaterials && (
+                        <Chip label="Pregio" size="small" color="warning" variant="outlined" />
+                      )}
+                      {room.centralHeating && (
+                        <Chip label="Risc." size="small" color="error" variant="outlined" />
+                      )}
+                    </Box>
                   </TableCell>
                   <TableCell align="center">
                     <Tooltip title="Modifica">
@@ -416,8 +486,8 @@ function FloorSection({ unitId, floor }: FloorSectionProps) {
         open={addRoomOpen}
         title={`Nuovo Vano – ${floor.name}`}
         onClose={() => setAddRoomOpen(false)}
-        onSave={(name, roomType, areaMq, notes) => {
-          addRoom(unitId, floor.id, name, roomType, areaMq, notes);
+        onSave={(name, roomType, areaMq, notes, luxuryMaterials, centralHeating) => {
+          addRoom(unitId, floor.id, name, roomType, areaMq, notes, luxuryMaterials, centralHeating);
           setAddRoomOpen(false);
         }}
       />
@@ -429,8 +499,8 @@ function FloorSection({ unitId, floor }: FloorSectionProps) {
           title={`Modifica Vano – ${editRoom.name}`}
           initial={editRoom}
           onClose={() => setEditRoom(null)}
-          onSave={(name, roomType, areaMq, notes) => {
-            updateRoom(unitId, floor.id, editRoom.id, { name, roomType, areaMq, notes });
+          onSave={(name, roomType, areaMq, notes, luxuryMaterials, centralHeating) => {
+            updateRoom(unitId, floor.id, editRoom.id, { name, roomType, areaMq, notes, luxuryMaterials, centralHeating });
             setEditRoom(null);
           }}
         />
@@ -534,6 +604,80 @@ export default function UnitaTab() {
             {unit.floors.map(floor => (
               <FloorSection key={floor.id} unitId={unit.id} floor={floor} />
             ))}
+
+            {/* ── Luxury flags per unit (DM 2/8/1969) ── */}
+            {unit.unitType === 'DwellingA' && (
+              <Paper variant="outlined" sx={{ p: 2, mt: 2, borderColor: 'warning.light' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+                  <Typography variant="subtitle2" color="warning.dark" fontWeight={700}>
+                    Caratteristiche di lusso – Unità (DM 2/8/1969)
+                  </Typography>
+                  <InfoTooltip text="Il DM 2 agosto 1969 definisce le abitazioni di lusso. Se anche solo uno dei 7 criteri è soddisfatto, l'unità è di lusso (categorie A/1, A/8, A/9) e non può beneficiare delle agevolazioni prima casa né dell'esenzione IMU come abitazione principale." />
+                </Box>
+                <FormGroup>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        size="small"
+                        checked={unit.hasPool ?? false}
+                        onChange={e => updateUnit(unit.id, { hasPool: e.target.checked })}
+                      />
+                    }
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Typography variant="body2">Criterio 3 – Piscina scoperta ≥ 80 m² o maneggio</Typography>
+                        <InfoTooltip size="small" text="L'unità dispone di una piscina scoperta di almeno 80 m² di specchio d'acqua, oppure di un maneggio per cavalli, anche se di pertinenza comune con altri soggetti." />
+                      </Box>
+                    }
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        size="small"
+                        checked={unit.hasPrivateLift ?? false}
+                        onChange={e => updateUnit(unit.id, { hasPrivateLift: e.target.checked })}
+                      />
+                    }
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Typography variant="body2">Criterio 4 – Ascensore esclusivo (al servizio di meno di 4 appartamenti)</Typography>
+                        <InfoTooltip size="small" text="L'edificio dispone di un ascensore al servizio esclusivo dell'appartamento oppure al servizio di non più di altri 3 appartamenti. Gli ascensori condominiali normali (al servizio di molti appartamenti) non rientrano in questo criterio." />
+                      </Box>
+                    }
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        size="small"
+                        checked={unit.isVilla ?? false}
+                        onChange={e => updateUnit(unit.id, { isVilla: e.target.checked })}
+                      />
+                    }
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Typography variant="body2">Criterio 7 – Villa unifamiliare isolata con giardino</Typography>
+                        <InfoTooltip size="small" text="L'abitazione è una villa unifamiliare isolata (non adiacente ad altre abitazioni) con giardino privato. Il criterio di lusso scatta se la superficie del giardino supera 6 volte la superficie coperta dell'abitazione. Inserire la superficie del giardino nel campo seguente." />
+                      </Box>
+                    }
+                  />
+                  {(unit.isVilla ?? false) && (
+                    <TextField
+                      size="small"
+                      label="Superficie giardino (m²)"
+                      type="number"
+                      inputProps={{ min: 0, step: 1 }}
+                      value={unit.gardenMq ?? ''}
+                      onChange={e => {
+                        const v = parseFloat(e.target.value);
+                        updateUnit(unit.id, { gardenMq: isNaN(v) ? 0 : v });
+                      }}
+                      sx={{ mt: 1, maxWidth: 240 }}
+                      helperText="Area del giardino privato in m² (la scheda Risultati calcolerà il rapporto con la superficie coperta)"
+                    />
+                  )}
+                </FormGroup>
+              </Paper>
+            )}
 
             <Divider sx={{ my: 1 }} />
 

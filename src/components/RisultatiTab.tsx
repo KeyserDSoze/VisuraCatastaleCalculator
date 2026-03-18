@@ -24,8 +24,9 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import InfoIcon from '@mui/icons-material/Info';
+import CallMergeIcon from '@mui/icons-material/CallMerge';
 import { useProject } from '../context/ProjectContext';
-import { runScenario, ScenarioResult, RenditaResult } from '../engine/calculator';
+import { runScenario, mergeUnits, ScenarioResult, RenditaResult, LuxuryAnalysis } from '../engine/calculator';
 import { ROOM_TYPE_LABELS, RoomType } from '../models/types';
 
 // ── Currency formatter ────────────────────────────────────────────────────────
@@ -137,9 +138,65 @@ function AuditTrailPanel({ result }: { result: RenditaResult }) {
   );
 }
 
+// ── Luxury criteria panel ─────────────────────────────────────────────────────
+
+function LuxuryCriteriaPanel({ analysis }: { analysis: LuxuryAnalysis }) {
+  const count = analysis.triggeredCount;
+  return (
+    <Accordion sx={{ mt: 1, border: 1, borderColor: 'warning.light' }}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <WarningAmberIcon color={analysis.isLuxury ? 'warning' : 'disabled'} fontSize="small" />
+          <Typography variant="subtitle2">
+            Analisi Lusso DM 2/8/1969
+          </Typography>
+          <Chip
+            label={count === 0 ? 'Nessun criterio' : `${count} criteri${count > 1 ? '' : 'o'} attivo/i`}
+            size="small"
+            color={count > 0 ? 'warning' : 'default'}
+          />
+        </Box>
+      </AccordionSummary>
+      <AccordionDetails sx={{ p: 1.5 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+          Un'unità è di lusso (A/1, A/8, A/9) se soddisfa anche solo uno dei criteri del DM 2 agosto 1969.
+        </Typography>
+        <Table size="small">
+          <TableBody>
+            {analysis.criteria.map(c => (
+              <TableRow key={c.id} sx={{ '&:last-child td': { border: 0 } }}>
+                <TableCell sx={{ width: 28, pr: 0 }}>
+                  {c.triggered
+                    ? <WarningAmberIcon color="warning" fontSize="small" />
+                    : <CheckCircleIcon color="disabled" fontSize="small" />}
+                </TableCell>
+                <TableCell sx={{ width: 32, color: 'text.secondary' }}>
+                  <Typography variant="caption">cr.{c.id}</Typography>
+                </TableCell>
+                <TableCell>
+                  <Typography variant="body2" fontWeight={c.triggered ? 700 : 400} color={c.triggered ? 'warning.dark' : 'text.primary'}>
+                    {c.label}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {c.detail}
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </AccordionDetails>
+    </Accordion>
+  );
+}
+
 // ── Scenario result card ──────────────────────────────────────────────────────
 
-function ScenarioCard({ result }: { result: ScenarioResult }) {
+function ScenarioCard({ result, isFusion, fusionUnitNames }: {
+  result: ScenarioResult;
+  isFusion?: boolean;
+  fusionUnitNames?: string[];
+}) {
   const { flags, warnings } = result;
 
   return (
@@ -159,8 +216,13 @@ function ScenarioCard({ result }: { result: ScenarioResult }) {
         <Typography variant="h6" sx={{ flex: 1 }}>
           {result.scenarioName}
         </Typography>
-        {flags.luxuryThreshold && (
-          <Tooltip title="Superficie > 240 m² — possibile abitazione di lusso">
+        {isFusion && (
+          <Tooltip title={`Fusione di: ${(fusionUnitNames ?? []).join(', ')}`}>
+            <Chip icon={<CallMergeIcon />} label="Fusione" color="warning" size="small" />
+          </Tooltip>
+        )}
+        {flags.luxuryAnalysis.isLuxury && (
+          <Tooltip title="Possibile abitazione di lusso (DM 2/8/1969) — espandi per dettagli">
             <Chip icon={<WarningAmberIcon />} label="Lusso" color="warning" size="small" />
           </Tooltip>
         )}
@@ -284,6 +346,11 @@ function ScenarioCard({ result }: { result: ScenarioResult }) {
             </AccordionDetails>
           </Accordion>
         )}
+
+        {/* Luxury criteria analysis */}
+        {flags.luxuryAnalysis.criteria.length > 0 && (
+          <LuxuryCriteriaPanel analysis={flags.luxuryAnalysis} />
+        )}
       </Box>
     </Paper>
   );
@@ -341,7 +408,7 @@ function ComparisonTable({ results }: { results: ScenarioResult[] }) {
                 </TableCell>
                 <TableCell>
                   <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                    {r.flags.luxuryThreshold && (
+                    {r.flags.luxuryAnalysis.isLuxury && (
                       <Chip label="Lusso" size="small" color="warning" />
                     )}
                     {r.flags.imuAtRisk && (
@@ -375,8 +442,10 @@ export default function RisultatiTab() {
 
   const results = useMemo<ScenarioResult[]>(() => {
     return project.scenarios.map(s => {
-      const dwellingUnit = project.units.find(u => u.id === s.dwellingUnitId);
-      const pertinenzaUnit = s.enablePertinenza
+      const dwellingUnit = (s.isFusion ?? false)
+        ? mergeUnits(project.units.filter(u => (s.fusionUnitIds ?? []).includes(u.id)))
+        : project.units.find(u => u.id === s.dwellingUnitId);
+      const pertinenzaUnit = (!s.isFusion && s.enablePertinenza)
         ? project.units.find(u => u.id === s.pertinenzaUnitId)
         : undefined;
 
@@ -437,9 +506,19 @@ export default function RisultatiTab() {
         Dettaglio per Scenario
       </Typography>
 
-      {results.map(r => (
-        <ScenarioCard key={r.scenarioId} result={r} />
-      ))}
+      {results.map((r, i) => {
+        const s = project.scenarios[i];
+        return (
+          <ScenarioCard
+            key={r.scenarioId}
+            result={r}
+            isFusion={s?.isFusion ?? false}
+            fusionUnitNames={(s?.fusionUnitIds ?? []).map(
+              id => project.units.find(u => u.id === id)?.name ?? id,
+            )}
+          />
+        );
+      })}
     </Box>
   );
 }

@@ -76,7 +76,7 @@ interface ProjectContextValue {
   deleteFloor: (unitId: string, floorId: string) => void;
 
   // rooms
-  addRoom: (unitId: string, floorId: string, name: string, roomType: RoomType, areaMq: number, notes?: string) => void;
+  addRoom: (unitId: string, floorId: string, name: string, roomType: RoomType, areaMq: number, notes?: string, luxuryMaterials?: boolean, centralHeating?: boolean) => void;
   updateRoom: (unitId: string, floorId: string, roomId: string, updates: Partial<Omit<Room, 'id'>>) => void;
   deleteRoom: (unitId: string, floorId: string, roomId: string) => void;
 
@@ -248,13 +248,13 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   // ── Rooms ─────────────────────────────────────────────────────────────────────
 
   const addRoom = useCallback(
-    (unitId: string, floorId: string, name: string, roomType: RoomType, areaMq: number, notes = '') =>
+    (unitId: string, floorId: string, name: string, roomType: RoomType, areaMq: number, notes = '', luxuryMaterials = false, centralHeating = false) =>
       patch(p => ({
         ...p,
         units: updateUnitsIn(p.units, unitId, u =>
           updateFloorsIn(u, floorId, f => ({
             ...f,
-            rooms: [...f.rooms, { id: uuidv4(), name, roomType, areaMq, notes }],
+            rooms: [...f.rooms, { id: uuidv4(), name, roomType, areaMq, notes, luxuryMaterials, centralHeating }],
           })),
         ),
       })),

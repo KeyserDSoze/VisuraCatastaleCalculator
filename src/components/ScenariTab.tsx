@@ -17,7 +17,9 @@ import {
   FormControl,
   InputLabel,
   FormControlLabel,
+  FormGroup,
   Switch,
+  Checkbox,
   Chip,
   IconButton,
   Grid,
@@ -29,6 +31,7 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import CallMergeIcon from '@mui/icons-material/CallMerge';
 import { useProject } from '../context/ProjectContext';
 import { Scenario, CATEGORY_OPTIONS_A, CATEGORY_OPTIONS_C, CLASS_OPTIONS } from '../models/types';
 import InfoTooltip from './InfoTooltip';
@@ -36,6 +39,8 @@ import InfoTooltip from './InfoTooltip';
 function emptyScenario(dwellingUnitId = '', pertinenzaUnitId = ''): Omit<Scenario, 'id'> {
   return {
     name: '',
+    isFusion: false,
+    fusionUnitIds: [],
     dwellingUnitId,
     dwellingCategory: 'A/3',
     dwellingClass: '1',
@@ -66,6 +71,8 @@ function ScenarioDialog({ open, initial, onClose, onSave }: ScenarioDialogProps)
     initial
       ? {
           name: initial.name,
+          isFusion: initial.isFusion ?? false,
+          fusionUnitIds: initial.fusionUnitIds ?? [],
           dwellingUnitId: initial.dwellingUnitId,
           dwellingCategory: initial.dwellingCategory,
           dwellingClass: initial.dwellingClass,
@@ -174,6 +181,7 @@ function ScenarioDialog({ open, initial, onClose, onSave }: ScenarioDialogProps)
           </Paper>
 
           {/* ── Pertinenza ──────────────────────────────────────────── */}
+          {!(form.isFusion ?? false) && (
           <Paper variant="outlined" sx={{ p: 2 }}>
             <FormControlLabel
               control={
@@ -234,6 +242,7 @@ function ScenarioDialog({ open, initial, onClose, onSave }: ScenarioDialogProps)
               </Grid>
             )}
           </Paper>
+          )}
 
           {/* ── IMU ─────────────────────────────────────────────────── */}
           <Paper variant="outlined" sx={{ p: 2 }}>
@@ -307,7 +316,12 @@ function ScenarioDialog({ open, initial, onClose, onSave }: ScenarioDialogProps)
         <Button
           variant="contained"
           onClick={handleSave}
-          disabled={!form.name.trim() || !form.dwellingUnitId}
+          disabled={
+            !form.name.trim() ||
+            ((form.isFusion ?? false)
+              ? (form.fusionUnitIds ?? []).length < 2
+              : !form.dwellingUnitId)
+          }
         >
           {initial ? 'Salva' : 'Aggiungi'}
         </Button>
@@ -372,8 +386,12 @@ export default function ScenariTab() {
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', pr: 2 }}>
               <Typography sx={{ flex: 1, fontWeight: 600 }}>{s.name}</Typography>
-              <Chip label={s.dwellingCategory} size="small" color="primary" />
-              {s.enablePertinenza && (
+              {(s.isFusion ?? false) ? (
+                <Chip icon={<CallMergeIcon />} label={`Fusione ${(s.fusionUnitIds ?? []).length} unità`} size="small" color="warning" />
+              ) : (
+                <Chip label={s.dwellingCategory} size="small" color="primary" />
+              )}
+              {!s.isFusion && s.enablePertinenza && (
                 <Chip label={`+ ${s.pertinenzaCategory}`} size="small" color="secondary" />
               )}
               {s.enableImu && <Chip label="IMU" size="small" color="warning" />}
@@ -398,13 +416,27 @@ export default function ScenariTab() {
           </AccordionSummary>
           <AccordionDetails>
             <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <Typography variant="body2" color="text.secondary">Abitazione</Typography>
-                <Typography variant="body1">
-                  {getUnitName(s.dwellingUnitId)} — {s.dwellingCategory} cl.{s.dwellingClass}
-                </Typography>
-              </Grid>
-              {s.enablePertinenza && (
+              {(s.isFusion ?? false) ? (
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="text.secondary">Unità accorpate</Typography>
+                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+                    {(s.fusionUnitIds ?? []).map(id => (
+                      <Chip key={id} label={getUnitName(id)} size="small" color="warning" variant="outlined" />
+                    ))}
+                  </Box>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    Categoria / Classe: <strong>{s.dwellingCategory} cl.{s.dwellingClass}</strong>
+                  </Typography>
+                </Grid>
+              ) : (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" color="text.secondary">Abitazione</Typography>
+                  <Typography variant="body1">
+                    {getUnitName(s.dwellingUnitId)} — {s.dwellingCategory} cl.{s.dwellingClass}
+                  </Typography>
+                </Grid>
+              )}
+              {!s.isFusion && s.enablePertinenza && (
                 <Grid item xs={12} md={6}>
                   <Typography variant="body2" color="text.secondary">Pertinenza</Typography>
                   <Typography variant="body1">
